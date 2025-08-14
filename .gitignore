@@ -1,2 +1,55 @@
+# Project documentation & milestones
 /Milestones
-/Idea.md
+Idea.md
+
+# Backend dependencies & build artifacts
+/backend/node_modules
+/backend/.pnpm-store
+/backend/dist
+/backend/build
+/backend/.env
+
+# Frontend dependencies & build artifacts
+/frontend/node_modules
+/frontend/.pnpm-store
+/frontend/dist
+/frontend/.vite
+/frontend/.env
+/frontend/.DS_Store
+
+# Common ignores
+node_modules
+.pnpm-store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Editor-specific
+.vscode/
+.idea/
+
+# Docker
+docker-compose.override.yml
+
+# Electron-specific
+# Output of 'npm run build' or 'electron-builder'
+release/
+out/
+build/
+*.asar
+
+# Electron cache
+.cache
+electron-builder.yml
+
+# GitHub Actions Cache / CI/CD
+# Prevent committing build artifacts restored by CI
+.github/cache/
+.github/workflows/cache/
+tmp/
