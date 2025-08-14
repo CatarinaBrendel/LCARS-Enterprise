@@ -1,4 +1,6 @@
-const { contextBridge } = require('electron');
-contextBridge.exposeInMainWorld('api', {
-  // add safe APIs later
-});
+// frontend/preload.js
+const { contextBridge } = require('electron')
+
+contextBridge.exposeInMainWorld('env', {
+  isElectron: true,
+})

@@ -1,3 +1,4 @@
+## -- Backend -- ## 
 SHELL := /bin/bash
 DOCKER := docker
 DC := $(DOCKER) compose
@@ -38,3 +39,24 @@ psql: ## open psql (db must be running)
 # Danger: wipe DB data for a totally fresh start
 reset-db: ## remove pgdata volume (DANGEROUS)
 	-$(DOCKER) volume rm $$(basename $$PWD)_pgdata || true
+
+
+## -- Frontend -- ## 
+# Variables
+FRONTEND_DIR = frontend
+FRONTEND_NODE_BIN = $(FRONTEND_DIR)/node_modules/.bin
+
+.PHONY: frontend frontend-dev frontend-build
+
+# Default frontend target
+frontend: frontend-dev
+
+# Start Vite dev server for frontend (Electron loads from localhost)
+frontend-dev:
+	@echo "Starting frontend dev server..."
+	cd $(FRONTEND_DIR) && npm install && npm run dev
+
+# Build frontend production assets
+frontend-build:
+	@echo "Building frontend production assets..."
+	cd $(FRONTEND_DIR) && npm install && npm run build
