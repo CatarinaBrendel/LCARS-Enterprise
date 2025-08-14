@@ -23,6 +23,12 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => clearInterval(interval));
 });
 
-server.listen(PORT, () => {
-  console.log(`API listening on http://${HOST}${PORT}`);
-});
+(async () => {
+  if (process.env.NODE_ENV !== 'test') {
+    await ensureSchema({ seed: true });   // or seed: process.env.SEED !== 'false'
+  }
+  const server = http.createServer(app);
+  server.listen(PORT, HOST, () => {
+    console.log(`API listening on http://${HOST}:${PORT}`);
+  });
+})();

@@ -1,7 +1,7 @@
 // backend/database/init.js
 import { query } from './db.js';
 
-const ddl = `
+const createTable = `
 CREATE TABLE IF NOT EXISTS crew_status (
   id        BIGSERIAL PRIMARY KEY,
   name      TEXT        NOT NULL UNIQUE,
@@ -13,17 +13,21 @@ CREATE TABLE IF NOT EXISTS crew_status (
 CREATE UNIQUE INDEX IF NOT EXISTS crew_status_name_unique ON crew_status(name);
 `;
 
-export async function ensureSchema() {
-  await query(ddl);
-  // optional: seed one row so the UI has something to show
+export async function ensureSchema({seed = true} = {}) {
+  await query(createTable);
+  
+  if (!seed) return;
+
   try {
     await query(
     `INSERT INTO crew_status (name, role, status)
      VALUES ($1,$2,$3)
      ON CONFLICT (name) DO NOTHING`,
-    ['Philipp Brendel', 'Admin', 'OK']
+    ['Jean Luc Pickard', 'Admin', 'OK']
   );
   } catch (error) {
-    console.error('Seed failed: ', error.message);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error('Seed failed: ', error.message);
+    }
   }
 }

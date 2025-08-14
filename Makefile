@@ -59,8 +59,10 @@ lint-frontend: ## cd frontend && pnpm lint
 # ---------- Cleanup ----------
 ## Prune images/containers/networks/volumes older than 24h (safe)
 prune-day: ## docker system prune (older than 24h)
-	$(DOCKER) system prune -af --volumes --filter "until=24h"
+	$(DOCKER) system prune -af --filter "until=24h"
+	$(DOCKER) volume prune -f
 	$(DOCKER) builder prune -af --filter "until=24h"
+
 
 ## Aggressive cleanup (everything unused NOW) ⚠️
 prune-all: ## docker system prune NOW (danger)

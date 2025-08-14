@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "lint": "eslint .",
     "db:init": "node database/init.js",
-    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand"
+    "test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
+    "test:watch": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --watch"
   },
   "dependencies": {
     "@eslint/js": "^9.33.0",
