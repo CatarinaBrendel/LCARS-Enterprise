@@ -1,8 +1,10 @@
-import 'dotenv/config';
+import '../loadEnv.js';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import app from './app.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
+const HOST = process.env.HOST || '0.0.0.0'; 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*'
 
 const server = http.createServer(app);
@@ -22,5 +24,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`API listening on http://localhost:${PORT}`);
+  console.log(`API listening on http://${HOST}${PORT}`);
 });
