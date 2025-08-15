@@ -1,15 +1,12 @@
-# Project documentation & milestones
+# ──────────────────────────────
+# Project documentation
+# ──────────────────────────────
 /Milestones
 Idea.md
 
-# Backend dependencies & build artifacts
-/backend/node_modules
-/backend/.pnpm-store
-/backend/dist
-/backend/build
-/backend/.env
-
-# Frontend dependencies & build artifacts
+# ──────────────────────────────
+# Frontend (Vite / React / Tailwind)
+# ──────────────────────────────
 /frontend/node_modules
 /frontend/.pnpm-store
 /frontend/dist
@@ -17,7 +14,43 @@ Idea.md
 /frontend/.env
 /frontend/.DS_Store
 
+# ──────────────────────────────
+# Electron Main Process
+# ──────────────────────────────
+/main/node_modules
+/main/.pnpm-store
+/main/dist
+/main/build
+/main/.env
+/main/.DS_Store
+
+# Electron-specific build output
+release/
+out/
+build/
+*.asar
+
+# Electron packaging artifacts
+*.app
+*.exe
+*.dmg
+*.deb
+*.rpm
+*.snap
+*.AppImage
+*.zip
+*.tar.gz
+*.tar.xz
+*.pkg
+*.msi
+
+# Electron cache & config
+.cache
+electron-builder.yml
+
+# ──────────────────────────────
 # Common ignores
+# ──────────────────────────────
 node_modules
 .pnpm-store
 *.log
@@ -37,19 +70,9 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 
-# Electron-specific
-# Output of 'npm run build' or 'electron-builder'
-release/
-out/
-build/
-*.asar
-
-# Electron cache
-.cache
-electron-builder.yml
-
+# ──────────────────────────────
 # GitHub Actions Cache / CI/CD
-# Prevent committing build artifacts restored by CI
+# ──────────────────────────────
 .github/cache/
 .github/workflows/cache/
 tmp/

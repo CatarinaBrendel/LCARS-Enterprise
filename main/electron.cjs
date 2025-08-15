@@ -1,6 +1,7 @@
 // CommonJS on purpose (works regardless of "type" in package.json)
 const { app, BrowserWindow }  = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 const isDev = !app.isPackaged;
 
@@ -10,10 +11,6 @@ function resolvePreload() {
     // same dir as electron.js (recommended placement)
     path.join(__dirname, 'preload.cjs'),
     path.join(__dirname, 'preload.js'),
-
-    // if you prefer keeping it in src/ during dev
-    path.join(__dirname, 'src', 'preload.cjs'),
-    path.join(__dirname, 'src', 'preload.js'),
 
     // if you copy it into dist/ during packaging
     path.join(__dirname, 'dist', 'preload.cjs'),

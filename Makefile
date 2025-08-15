@@ -53,10 +53,29 @@ frontend: frontend-dev
 
 # Start Vite dev server for frontend (Electron loads from localhost)
 frontend-dev:
-	@echo "Starting frontend dev server..."
-	cd $(FRONTEND_DIR) && npm install && npm run dev
+	cd $(FRONTEND_DIR) && npm install && npm run dev & \
+	npx wait-on http://localhost:5173 && \
+	cd ../main && npm install && npm run dev
 
 # Build frontend production assets
 frontend-build:
 	@echo "Building frontend production assets..."
 	cd $(FRONTEND_DIR) && npm install && npm run build
+	
+
+## -- Electron -- ##
+ELECTRON_DIR = main
+
+electron-dev: ## Start Electron app (loads from localhost:5173)
+	@echo "Starting Electron..."
+	cd $(ELECTRON_DIR) && npm install && npm run dev
+
+
+## -- Combined Dev -- ##
+dev: ## Run frontend and Electron together
+	@echo "Starting frontend + Electron in parallel..."
+	cd $(FRONTEND_DIR) && npm install
+	cd $(ELECTRON_DIR) && npm install
+	npx concurrently \
+		"cd $(FRONTEND_DIR) && npm run dev" \
+		"cd $(ELECTRON_DIR) && npm run dev"

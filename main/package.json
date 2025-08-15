@@ -1,0 +1,17 @@
+{
+  "name": "enterprise-dashboard-main",
+  "private": true,
+  "version": "0.0.1",
+  "main": "electron.cjs",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "NODE_ENV=development electron .",
+    "start": "NODE_ENV=production electron .",
+    "lint": "eslint ."
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^37.3.0"
+  }
+}

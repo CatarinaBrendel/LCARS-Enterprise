@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+@layer base {
+  :root {
+    --lcars-amber: 242 169 0;
+    --lcars-gold: 255 184 74;
+    --lcars-copper: 184 106 31;
+    --lcars-brown: 122 63 16;
+    --lcars-red: 228 75 58;
+    --lcars-blue: 106 167 200;
+    --lcars-slate: 110 120 138;
+    --lcars-text: 255 199 102;
+  }
+}
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
@@ -7,38 +20,13 @@
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
+@layer utilities {
+  .bg-lcars-amber { background-color: rgb(var(--lcars-amber)); }
+  .bg-lcars-gold  { background-color: rgb(var(--lcars-gold)); }
+  .bg-lcars-copper { background-color: rgb(var(--lcars-copper)); }
+  .bg-lcars-brown { background-color: rgb(var(--lcars-brown)); }
+  .bg-lcars-red  { background-color: rgb(var(--lcars-red)); }
+  .bg-lcars-blue  { background-color: rgb(var(--lcars-blue)); }
+  .bg-lcars-slate  { background-color: rgb(var(--lcars-slate)); }
+  .lcars-text  { color: rgb(var(--lcars-text)); }
 }
