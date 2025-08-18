@@ -29,4 +29,5 @@
   .bg-lcars-blue  { background-color: rgb(var(--lcars-blue)); }
   .bg-lcars-slate  { background-color: rgb(var(--lcars-slate)); }
   .lcars-text  { color: rgb(var(--lcars-text)); }
+  .rounded-lcars {border-top-left-radius: 15px; border-top-right-radius: 15px; border-bottom-right-radius: 15px;}
 }
