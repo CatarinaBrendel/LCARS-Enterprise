@@ -17,9 +17,30 @@ jobs:
   backend:
     name: Backend (lint & test)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: appdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U app -d appdb"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://app:app@localhost:5432/appdb_test
+      INGEST_TOKEN: dev_only
+    
     defaults:
       run:
         working-directory: backend
+    
     steps:
       - uses: actions/checkout@v4
 
@@ -37,6 +58,18 @@ jobs:
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create appdb_test
+        env:
+          PGPASSWORD: app
+        run: |
+          psql -h localhost -U app -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='appdb_test'" | grep -q 1 \
+            || psql -h localhost -U app -d postgres -c "CREATE DATABASE appdb_test OWNER app"
 
       - name: Test
         run: pnpm test
