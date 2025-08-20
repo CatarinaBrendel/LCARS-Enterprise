@@ -48,20 +48,24 @@ services:
     restart: unless-stopped
 
   vite:
-    image: node:20-alpine
+    image: node:20
     working_dir: /app
-    command: sh -c "npm i -g pnpm && pnpm install && pnpm run dev -- --host"
+    entrypoint: ["/bin/sh","-lc"]
+    command: 
+      - set -e; export CI=true; corepack enable || true; (pnpm -v >/dev/null 2>&1 || npm i -g pnpm); pnpm install --force; HOST=0.0.0.0 pnpm run dev -- --host
     environment:
       - CHOKIDAR_USEPOLLING=true
     volumes:
       - ./frontend:/app
+      - /app/node_modules
+      - pnpm-store:/root/.local/share/pnpm
     expose:
-      - "5173"       # only inside the docker network
+      - "5173"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:5173/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 5s
       timeout: 5s
-      retries: 30     # Vite install can take a bit on first boot
+      retries: 30
     depends_on:
       api:
         condition: service_started
@@ -80,5 +84,46 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+    # efemeral test container
+  api-tests:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    env_file: .env
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgres://app:app@db:5432/appdb_test
+      INGEST_TOKEN: ${INGEST_TOKEN:-dev_only}
+    volumes:
+      - ./backend:/usr/src/app
+    command:
+      - /bin/sh
+      - -lc
+      - >
+        psql -h db -U app -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='appdb_test'" | grep -q 1
+        || psql -h db -U app -d postgres -c "CREATE DATABASE appdb_test OWNER app";
+        pnpm test
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["test"]
+
+  db-init-test:
+    image: postgres:16
+    command: >
+      sh -lc "
+        until pg_isready -h db -U app; do sleep 1; done;
+        psql -h db -U app -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='appdb_test'\" | grep -q 1
+        || psql -h db -U app -d postgres -c \"CREATE DATABASE appdb_test OWNER app\"
+      "
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    profiles: ["test"]
+
+
 volumes:
   pgdata:
+  pnpm-store:

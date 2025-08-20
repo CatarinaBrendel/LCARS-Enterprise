@@ -9,10 +9,19 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
 });
 
+pool.on('error', (err) => {
+  console.error('Unexpected PG error:', err.message);
+});
+
+
 export async function query(text, params) {
   return pool.query(text, params);
 }
 
 export function getClient() {
   return pool.connect();
+}
+
+export function endPool() {
+  return pool.end();
 }

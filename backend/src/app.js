@@ -2,24 +2,19 @@ import '../loadEnv.js';
 import express from 'express';
 import cors from 'cors';
 import healthRouter from './routes/health.js';
-//import auth from './routes/api/auth.js';
-import crewStatusRouter from './routes/api/crew-status.js';
-import * as crewStatusRepo from './repositories/crewStatus.repo.js';
-//import crew from './routes/api/crew-status.js';
-import { ensureSchema } from '../database/init.js';
+import crewRoutes from './routes/crew.js';
+import telemetryIngest from './routes/internal/telemetry.js';
 
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:8080';
 
 const app = express();
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json());
 
 // Routes
 app.use('/health', healthRouter);
-//app.use('/api/auth', auth);
-app.use('/api/crew-status', crewStatusRouter({repo: crewStatusRepo}));
-//app.use('/api/crew', crew);
-
+app.use('/api', crewRoutes);
+app.use('/api', telemetryIngest);
 
 // Error handler (keep it last)
 app.use((err, _req, res, _next) => {

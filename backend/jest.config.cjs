@@ -3,5 +3,5 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/__tests__/**/*.test.js'],
   transform: {},                // no Babel/TS transforms needed
-  setupFilesAfterEnv: ['<rootDir>/__tests__/setupTests.js']
+  testTimeout: 30000
 }

@@ -1,5 +1,10 @@
 import request from 'supertest'
 import app from '../src/app.js'
+import { endPool } from '../database/db.js';
+
+afterAll(async () => {
+  await endPool?.();
+});
 
 describe('GET /health', () => {
   it('returns ok:true and a timestamp', async () => {
