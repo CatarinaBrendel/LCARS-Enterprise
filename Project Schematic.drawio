@@ -1,0 +1,82 @@
+<mxfile host="65bd71144e">
+    <diagram id="vvTesjirs3_zb5JBqTzk" name="Page-1">
+        <mxGraphModel dx="1195" dy="786" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0" adaptiveColors="auto">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="&lt;b&gt;Proxy (Nginx)&lt;/b&gt;&lt;div&gt;&lt;b&gt;&lt;br&gt;&lt;/b&gt;&lt;div&gt;/ ➡️ vite&lt;/div&gt;&lt;div&gt;/api/&amp;nbsp;&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;➡️&lt;/span&gt;&amp;nbsp;api&lt;/div&gt;&lt;div&gt;/ws/crew&amp;nbsp;&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;➡️&lt;/span&gt;&amp;nbsp;api (websocket)&lt;/div&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+                    <mxGeometry x="338" y="110" width="166" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="&lt;b&gt;vite (React)&lt;/b&gt;&lt;div&gt;&lt;b&gt;&lt;br&gt;&lt;/b&gt;&lt;div&gt;HMR dev server&lt;/div&gt;&lt;div&gt;server behind proxy&lt;/div&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+                    <mxGeometry x="200" y="260" width="130" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="&lt;b&gt;api (Node + Express)&lt;/b&gt;&lt;div&gt;&lt;b&gt;&lt;br&gt;&lt;/b&gt;&lt;div&gt;REST /api/*&lt;/div&gt;&lt;div&gt;WS /was/crew&amp;nbsp;&lt;span style=&quot;color: rgb(63, 63, 63); background-color: transparent;&quot;&gt;(websocket)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;Ingest endpoint&lt;/div&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+                    <mxGeometry x="480" y="250" width="166" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="&lt;b&gt;simulator (internal)&lt;/b&gt;&lt;div&gt;&lt;b&gt;&lt;br&gt;&lt;/b&gt;&lt;div&gt;Posts metrics/events&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;➡️&lt;/span&gt;&amp;nbsp;ingest endpoint&lt;/div&gt;&lt;div&gt;/health (optional)&lt;/div&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+                    <mxGeometry x="60" y="440" width="166" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="6" value="&lt;b&gt;api-tests (Jest + Supertest)&lt;/b&gt;&lt;div&gt;&lt;b&gt;&lt;br&gt;&lt;/b&gt;&lt;/div&gt;&lt;div&gt;uses db (appdb_test)&lt;/div&gt;&lt;div&gt;runs in compose profile:test&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+                    <mxGeometry x="338" y="440" width="166" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="7" value="&lt;b&gt;DB (Postgres 16)&lt;/b&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;appdb (main DB)&lt;/div&gt;&lt;div&gt;appdb_test (tests)&lt;/div&gt;&lt;div&gt;port 5432&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+                    <mxGeometry x="620" y="440" width="166" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="5" target="4">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="450" y="430" as="sourcePoint"/>
+                        <mxPoint x="500" y="380" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="9" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.25;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="6" target="4">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="153" y="450" as="sourcePoint"/>
+                        <mxPoint x="550" y="315" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="10" value="" style="endArrow=classic;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="4" target="7">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="431" y="450" as="sourcePoint"/>
+                        <mxPoint x="592" y="370" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="11" value="" style="endArrow=classic;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="2" target="3">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="153" y="450" as="sourcePoint"/>
+                        <mxPoint x="490" y="315" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="12" value="" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="2" target="4">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="348" y="175" as="sourcePoint"/>
+                        <mxPoint x="275" y="270" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="13" value="" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="6" target="7">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="431" y="450" as="sourcePoint"/>
+                        <mxPoint x="532" y="370" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="14" value="HTTP /health&lt;span style=&quot;color: rgb(63, 63, 63); text-wrap-mode: wrap;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;color: rgb(63, 63, 63); text-wrap-mode: wrap;&quot;&gt;➡️&lt;/span&gt;&amp;nbsp;api" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+                    <mxGeometry x="180" y="180" width="130" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="15" value="HTTP /api, /ws/crew, /health" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+                    <mxGeometry x="530" y="180" width="170" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="16" value="HTTP ingest" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+                    <mxGeometry x="350" y="300" width="90" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="18" value="Supertest" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+                    <mxGeometry x="490" y="380" width="70" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="19" value="SQL 5432" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+                    <mxGeometry x="675" y="380" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="20" value="SQL (test db)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+                    <mxGeometry x="515" y="460" width="90" height="30" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
