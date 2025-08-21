@@ -84,10 +84,15 @@ jobs:
         env:
           INGEST_TOKEN: dev_only_change_me_please   # pass whatever your tests expect
         run: |
-          docker compose --profile test up \
-            --build \
-            --abort-on-container-exit \
-            --exit-code-from api-tests
+          # start only the db (detached, with healthcheck)
+          docker compose --profile test up -d db
+
+          # run tests in a one-off container, exit on Jest exit
+          docker compose --profile test run --rm api-tests \
+            sh -lc 'pnpm test -- --ci --runInBand --detectOpenHandles'
+
+          # tear everything down (cleanup db + volumes)
+          docker compose --profile test down -v
       
       - name: Dump container logs on failure
         if: failure()
