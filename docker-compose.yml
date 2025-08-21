@@ -94,7 +94,7 @@ services:
     environment:
       NODE_ENV: test
       DATABASE_URL: postgres://app:app@db:5432/appdb_test
-      INGEST_TOKEN: ${INGEST_TOKEN:-dev_only}
+      INGEST_TOKEN: ${INGEST_TOKEN:-dev_only_change_me_please}
     volumes:
       - ./backend:/usr/src/app
     command:
