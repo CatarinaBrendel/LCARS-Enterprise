@@ -17,9 +17,16 @@ export async function ensureSchema({ seed = false } = {}) {
   console.log('[migrate] DB:', maskedUrl);
   console.log('[migrate] dir:', migDir);
 
-  const files = (await fs.readdir(migDir))
-    .filter(f => f.endsWith('.sql'))
-    .sort();
+    const files = (await fs.readdir(migDir))
+      // accept .sql, .SQL, .Sql, etc.
+      .filter(f => /\.sql$/i.test(f))
+      // natural/numeric sort so 10 comes after 9
+      .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+  
+    console.log('[migrate] files:', files);
+    if (!files.some(f => /^004_retention\.sql$/i.test(f))) {
+      console.warn('[migrate] WARNING: retention migration (004_retention.sql) not found in dir:', migDir);
+    }
 
     if (!files.includes('004_retention.sql')) {
       throw new Error(`[migrate] 004_retention.sql not found in ${migDir}. Got: ${files.join(', ')}`);

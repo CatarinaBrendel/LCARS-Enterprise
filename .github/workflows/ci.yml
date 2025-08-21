@@ -78,7 +78,17 @@ jobs:
 
       - name: "Pre-flight: show migrations"
         working-directory: backend
-        run: echo "== ls backend/database/migrations ==" && ls -la database/migrations || true && echo "== grep retention ==" && grep -nH "prune_crew_metric_age_with_floor" database/migrations/* || true && echo "== git-tracked files ==" && git ls-files database/migrations
+        run: |
+          set -e
+          echo "== ls backend/database/migrations =="
+          ls -la database/migrations
+          echo "== grep retention function =="
+          if ! grep -nH "prune_crew_metric_age_with_floor" database/migrations/*; then
+            echo "[warn] retention function not found in migration files (grep failed)"
+          fi
+          echo "== git-tracked files under migrations =="
+          git ls-files database/migrations
+          
 
       - name: Run backend tests (docker compose)
         env:
