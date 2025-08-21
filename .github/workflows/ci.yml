@@ -84,27 +84,37 @@ jobs:
         env:
           INGEST_TOKEN: dev_only_change_me_please   # pass whatever your tests expect
         run: |
-          # 1) start only the DB for the test profile
+          set -e
+          # start only the DB
           docker compose --profile test up -d db
 
-          # 2) wait for DB and ensure appdb_test exists (run psql inside the db container)
+          # wait + create appdb_test FROM INSIDE the db container (local socket, no password prompt)
           echo "[ci] waiting for postgres..."
           docker compose exec -T db sh -lc '
             until pg_isready -U app -d postgres >/dev/null 2>&1; do sleep 1; done;
             echo "[ci] ensuring appdb_test exists...";
-            # use local socket (no -h), trust auth is enabled at init
             psql -U app -d postgres -v ON_ERROR_STOP=1 -tc "SELECT 1 FROM pg_database WHERE datname='\''appdb_test'\''" | grep -q 1 \
-              || psql -U app -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE appdb_test OWNER app"
+              || psql -U app -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE appdb_test OWNER app";
+            echo "[ci] databases:"; psql -U app -d postgres -c "\l" | sed -n '1,10p'
           '
 
-          # 3) Run tests as a one-off container; exits when Jest exits
-          echo "[ci] running jest..."
+          # quick sanity check: does the test container see the right URL and can it connect?
+          docker compose --profile test run --rm api-tests sh -lc '
+            echo "[ci] DATABASE_URL=$DATABASE_URL";
+            node -e "
+              const {Client}=require(\"pg\");
+              const c=new Client({connectionString:process.env.DATABASE_URL});
+              c.connect().then(()=>c.end()).then(()=>console.log(\"[ci] pg connection OK\")).catch(e=>{console.error(\"[ci] pg connect FAIL:\", e.message); process.exit(1);});
+            "
+          '
+
+          # run jest and exit
           docker compose --profile test run --rm api-tests \
             sh -lc 'pnpm test -- --ci --runInBand --detectOpenHandles'
 
-          # 4) Tear down for a clean workspace
+          # tear down
           docker compose --profile test down -v
-      
+          
       - name: Dump container logs on failure
         if: failure()
         run: |
