@@ -40,7 +40,7 @@ build/
 *.AppImage
 *.zip
 *.tar.gz
-*.tar.xz
+*.tar.xza
 *.pkg
 *.msi
 

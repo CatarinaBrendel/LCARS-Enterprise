@@ -10,6 +10,14 @@
     "test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
     "test:watch": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --watch"
   },
+  "files": [
+    "src/**",
+    "database/migrations/**",
+    "database/init.js",
+    "database/db.js",
+    "__tests__/**",
+    "loadEnv.js"
+  ],
   "dependencies": {
     "@eslint/js": "^9.33.0",
     "cors": "^2.8.5",

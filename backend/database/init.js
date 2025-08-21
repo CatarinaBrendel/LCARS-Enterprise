@@ -21,6 +21,10 @@ export async function ensureSchema({ seed = false } = {}) {
     .filter(f => f.endsWith('.sql'))
     .sort();
 
+    if (!files.includes('004_retention.sql')) {
+      throw new Error(`[migrate] 004_retention.sql not found in ${migDir}. Got: ${files.join(', ')}`);
+    }
+
   for (const f of files) {
     if (!seed && /seed/i.test(f)) {
       console.log('[migrate] skip seed:', f);
@@ -50,4 +54,9 @@ export async function ensureSchema({ seed = false } = {}) {
       console.log('[migrate] retention functions present:', check.rows.map(r => `${r.proname}(${r.args})`));
     }
   }
+
+  // backend/database/init.js
+  const filesToLog = (await fs.readdir(migDir)).filter(f => f.endsWith('.sql')).sort();
+  console.log('[migrate] files:', filesToLog);
+
 }
