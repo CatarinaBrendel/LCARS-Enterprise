@@ -15,6 +15,7 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
+    profiles: ["test", "dev", "prod"]
 
   api:
     build:
@@ -46,6 +47,7 @@ services:
     ports:
       - "3001:3001"   # keep if you want to curl API directly from host
     restart: unless-stopped
+    profiles: ["dev"]
 
   vite:
     image: node:20
@@ -70,6 +72,7 @@ services:
       api:
         condition: service_started
     restart: unless-stopped
+    profiles: ["dev"]
 
   proxy:
     image: nginx:1.27-alpine
@@ -83,15 +86,19 @@ services:
       vite:
         condition: service_healthy
     restart: unless-stopped
+    profiles: ["dev"]
 
     # efemeral test container
   api-tests:
+    restart: "no"
+    tty: false
     build:
       context: ./backend
       dockerfile: Dockerfile
       target: dev
     env_file: .env
     environment:
+      CI: "true"
       NODE_ENV: test
       DATABASE_URL: postgres://app:app@db:5432/appdb_test
       INGEST_TOKEN: ${INGEST_TOKEN:-dev_only_change_me_please}
@@ -103,14 +110,38 @@ services:
       - -lc
       - >
         set -e;
+        echo "[tests] waiting for db...";
         until pg_isready -h db -U app -d postgres >/dev/null 2>&1; do sleep 1; done;
-        psql -h db -U app -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='appdb_test'" | grep -q 1 || \
-        psql -h db -U app -d postgres -c "CREATE DATABASE appdb_test OWNER app";
-        pnpm test -- --detectOpenHandles
+        echo "[tests] db is ready";
+        echo "[tests] ensuring appdb_test exists...";
+        psql -h db -U app -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='appdb_test'" | grep -q 1 \
+          || psql -h db -U app -d postgres -c "CREATE DATABASE appdb_test OWNER app";
+        echo "[tests] running jest...";
+        pnpm test -- --ci --runInBand --detectOpenHandles;
+        echo "[tests] jest finished";
     depends_on:
       db:
         condition: service_healthy
     profiles: ["test"]
+
+ # Prod API (no bind mount; uses Dockerfile prod target)
+  api-prod:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: prod
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?set in env or .env}
+      PORT: 3001
+      HOST: 0.0.0.0
+      STARTUP_MIGRATE: block
+      STARTUP_SEED: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["3001:3001"]
+    profiles: ["prod"]
 
 volumes:
   pgdata:
