@@ -19,6 +19,18 @@ function auth(req, res, next) {
   next();
 }
 
+// helpers (ingest route file)
+function requireIntId(raw, field = 'crew_id') {
+  const n = Number(raw);
+  if (!Number.isInteger(n)) {
+    const v = raw === undefined ? 'undefined' : JSON.stringify(raw);
+    const err = new Error(`${field} must be an integer id, got ${v}`);
+    err.status = 400;
+    throw err;
+  }
+  return n;
+}
+
 const router = Router();
 
 router.post('/internal/telemetry/ingest', auth, async (req, res) => {
@@ -28,7 +40,8 @@ router.post('/internal/telemetry/ingest', auth, async (req, res) => {
   }
 
   for (const m of metrics) {
-    if (!m?.crew_id || !m?.metric || !m?.ts) {
+    const cid = requireIntId(m.crewId ?? m.crew_id, 'crewId');
+    if (cid == null || !m?.metric || !m?.ts) {
       return res.status(400).json({ ok: false, error: 'metric missing crew_id/metric/ts' });
     }
     if (!ALLOWED_METRICS.has(m.metric)) {
@@ -42,13 +55,16 @@ router.post('/internal/telemetry/ingest', auth, async (req, res) => {
   }
 
   for (const ev of events) {
-    if (!ev?.crew_id || !ev?.event_type || !ev?.ts || typeof ev?.severity !== 'number') {
-      return res.status(400).json({ ok: false, error: 'event missing crew_id/event_type/ts/severity' });
+    const cid = requireIntId(ev.crewId ?? ev.crew_id, 'crewId');
+    const sev = Number(ev.severity);
+    if (cid == null || !ev?.event_type || !ev?.ts || !Number.isFinite(sev)) {
+      console.log(`${cid}, ${!ev?.event_type}, ${!ev?.ts}, ${!Number.isFinite(sev)}`);
+      return res.status(400).json({ ok: false, error: `event missing crew_id/event_type/ts/severity` });
     }
     if (!ALLOWED_EVENTS.has(ev.event_type)) {
       return res.status(400).json({ ok: false, error: `unknown event ${ev.event_type}` });
     }
-    if (ev.severity < 1 || ev.severity > 5) {
+    if (sev < 1 || sev > 5) {
       return res.status(400).json({ ok: false, error: 'severity out of range' });
     }
   }
@@ -56,10 +72,12 @@ router.post('/internal/telemetry/ingest', auth, async (req, res) => {
   try {
     // simple, readable inserts (fine for tests/dev)
     for (const m of metrics) {
+      const crewId = requireIntId(m.crewId ?? m.crew_id, 'crewId');
+
       await query(
         `INSERT INTO crew_metric (ts, crew_id, metric_name, value, text_value, unit)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [m.ts, m.crew_id, m.metric,
+         VALUES ($1,$2::int,$3,$4,$5,$6)`,
+        [m.ts, crewId, m.metric,
          typeof m.value === 'number' ? m.value : null,
          typeof m.text_value === 'string' ? m.text_value : null,
          m.unit ?? null]
@@ -67,10 +85,13 @@ router.post('/internal/telemetry/ingest', auth, async (req, res) => {
     }
 
     for (const ev of events) {
+      const crewId = requireIntId(ev.crewId ?? ev.crew_id, 'crewId');
+      const sev = Number(ev.severity);
+      
       await query(
         `INSERT INTO crew_event (ts, crew_id, event_type, severity, details)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [ev.ts, ev.crew_id, ev.event_type, ev.severity, ev.details ?? null]
+         VALUES ($1,$2::int,$3,$4,$5)`,
+        [ev.ts, crewId, ev.event_type, sev, ev.details ?? null]
       );
     }
 

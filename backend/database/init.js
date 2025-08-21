@@ -1,34 +1,53 @@
 // backend/database/init.js
-import fs from 'fs';
+import fs from 'node:fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { query } from './db.js';
+import { query, getClient } from './db.js'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// migrations live in backend/database/migrations
-const MIGRATIONS_DIR = path.resolve(__dirname, './migrations');
+export async function ensureSchema({ seed = false } = {}) {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  // resolves to <repo>/backend/database/migrations
+  const migDir = path.resolve(__dirname, './migrations');
 
-export async function ensureSchema({ seed = true } = {}) {
-  if (!fs.existsSync(MIGRATIONS_DIR)) {
-    throw new Error(`Migrations dir not found: ${MIGRATIONS_DIR}`);
-  }
+  // helpful logging so you can see what runs and against which DB
+  const maskedUrl = (process.env.DATABASE_URL || '').replace(/\/\/.*@/, '//***@');
+  console.log('[migrate] DB:', maskedUrl);
+  console.log('[migrate] dir:', migDir);
 
-  const files = fs.readdirSync(MIGRATIONS_DIR)
-    .filter(f => /^\d+_.*\.sql$/i.test(f))
+  const files = (await fs.readdir(migDir))
+    .filter(f => f.endsWith('.sql'))
     .sort();
 
   for (const f of files) {
-    const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8');
-    await query(sql);
-    console.log(`Migration ${f}: OK`);
-  }
+    if (!seed && /seed/i.test(f)) {
+      console.log('[migrate] skip seed:', f);
+      continue;
+    }
+    const sql = await fs.readFile(path.join(migDir, f), 'utf8');
+    console.log('[migrate] applying:', f);
+    try {
+      await query(sql);
+    } catch (error) {
+      console.error(`[migrate] FAILED: ${f} -> ${error.message}`);
+      throw error;
+    }
 
-  if (seed) {
-    const seeds = files.filter(f => /seed/i.test(f));
-    for (const f of seeds) {
-      console.log(`Seed ${f}: OK (included above)`);
+    // Assert the retention functions exist (so tests won’t blow up later)
+    const check = await query(`
+      SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname='public'
+        AND p.proname IN ('prune_crew_metric_age_with_floor','prune_crew_event_age_with_floor')
+      ORDER BY 1;
+    `);
+    if (check.rowCount < 2) {
+      throw new Error('[migrate] retention functions missing in DB. Did 004_retention.sql actually create them?');
+    } else {
+      console.log('[migrate] retention functions present:', check.rows.map(r => `${r.proname}(${r.args})`));
     }
   }
 }

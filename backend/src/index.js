@@ -3,6 +3,8 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import app from './app.js';
 import { ensureSchema } from '../database/init.js';
+import cron from 'node-cron';
+import { runRetentionOnce } from './retention.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const HOST = process.env.HOST || '0.0.0.0'; 
@@ -94,6 +96,16 @@ function shutdown(sig) {
   setTimeout(() => process.exit(1), 10000).unref();
 }
 ['SIGINT', 'SIGTERM'].forEach(s => process.on(s, () => shutdown(s)));
+
+// Europe/Berlin daily at 03:15
+const CRON = process.env.RETENTION_CRON ?? '15 3 * * *';
+
+// Cron job to clean up the metrics perioodically 
+if (process.env.START_RETENTION !== 'false') {
+  cron.schedule(CRON, () => {
+    runRetentionOnce(console).catch(err => console.error('[retention] error', err));
+  }, { timezone: 'Europe/Berlin' });
+}
 
 // expose readiness to app (health route can read it)
 app.set('ready', () => ready);

@@ -40,6 +40,9 @@ psql: ## open psql (db must be running)
 reset-db: ## remove pgdata volume (DANGEROUS)
 	-$(DOCKER) volume rm $$(basename $$PWD)_pgdata || true
 
+## -- Backend Test within Container -- ##
+container-test: 
+	docker compose --profile test run --rm api-tests sh -lc "pnpm test -- --runInBand --detectOpenHandles"
 
 ## -- Frontend -- ## 
 # Variables
