@@ -6,9 +6,13 @@ import { query } from '../database/db.js';
 let crewId;
 
 beforeAll(async () => {
-  // ✅ ensure a numeric crew id exists
   const q = await query('SELECT id FROM crew LIMIT 1');
-  crewId = q.rows[0]?.id ?? (await query('INSERT INTO crew DEFAULT VALUES RETURNING id')).rows[0].id;
+  crewId = q.rows[0]?.id ?? (
+  await query(
+      'INSERT INTO crew (name) VALUES ($1) RETURNING id',
+      ['Test Crew']
+    )
+  ).rows[0].id;
 });
 
 test('ingests and queries data', async () => {

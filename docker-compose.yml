@@ -10,10 +10,11 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1 -p 5432"]
+      interval: 52s
+      timeout: 2s
+      retries: 40
+      start_period: 5s
     restart: unless-stopped
     profiles: ["test", "dev", "prod"]
 

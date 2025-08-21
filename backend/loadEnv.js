@@ -1,35 +1,32 @@
-// backend/loadEnv.js (or at project root if you prefer)
-import { fileURLToPath } from 'url';
-import path from 'path';
-import dotenv from 'dotenv';
-import fs from 'fs';
+// backend/loadEnv.js
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs';
+import { config } from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Backend dir and repo root
-const backendRoot = path.resolve(__dirname, '.');
-const repoRoot = path.resolve(__dirname, '..');
+const backendRoot = path.resolve(__dirname, '.');   // /usr/src/app/backend
+const repoRoot    = path.resolve(__dirname, '..');  // /usr/src/app
 
+// 1) Load default .env IF vars aren't already set (override: false)
+config({ override: false });
 
-// Decide which file to load
 const isTest = process.env.NODE_ENV === 'test';
 const candidates = [
-  // Prefer a backend-local .env.test when in NODE_ENV=test
   isTest ? path.join(backendRoot, '.env.test') : null,
-  // Then backend/.env
   path.join(backendRoot, '.env'),
-  // Finally repo root .env (optional)
   path.join(repoRoot, '.env'),
-].filter(Boolean);
+].filter(Boolean).filter(p => fs.existsSync(p));
 
-// Pick the first that exists
-const chosen = candidates.find((p) => fs.existsSync(p));
-
-// Load it (dotenv does NOT override existing process.env by default)
-if (chosen) {
-  dotenv.config({ path: chosen });
+// 2) Load the first existing env file WITHOUT overriding existing env
+if (candidates.length) {
+  config({ path: candidates[0], override: false });
 }
+
+// Optional debug
 if (process.env.ENV_DEBUG === '1') {
-  console.log('[loadEnv]', { NODE_ENV: process.env.NODE_ENV, chosen, DATABASE_URL: process.env.DATABASE_URL });
+  const masked = (process.env.DATABASE_URL || '').replace(/\/\/.*@/, '//***@');
+  console.log('[loadEnv]', { NODE_ENV: process.env.NODE_ENV, chosen: candidates[0], DATABASE_URL: masked });
 }

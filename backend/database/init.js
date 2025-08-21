@@ -8,8 +8,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function ensureSchema({ seed = false } = {}) {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  // resolves to <repo>/backend/database/migrations
   const migDir = path.resolve(__dirname, './migrations');
 
   // helpful logging so you can see what runs and against which DB
@@ -20,50 +18,49 @@ export async function ensureSchema({ seed = false } = {}) {
     const files = (await fs.readdir(migDir))
       // accept .sql, .SQL, .Sql, etc.
       .filter(f => /\.sql$/i.test(f))
-      // natural/numeric sort so 10 comes after 9
       .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   
     console.log('[migrate] files:', files);
-    if (!files.some(f => /^004_retention\.sql$/i.test(f))) {
-      console.warn('[migrate] WARNING: retention migration (004_retention.sql) not found in dir:', migDir);
-    }
-
-    if (!files.includes('004_retention.sql')) {
-      throw new Error(`[migrate] 004_retention.sql not found in ${migDir}. Got: ${files.join(', ')}`);
-    }
-
-  for (const f of files) {
-    if (!seed && /seed/i.test(f)) {
-      console.log('[migrate] skip seed:', f);
-      continue;
-    }
-    const sql = await fs.readFile(path.join(migDir, f), 'utf8');
-    console.log('[migrate] applying:', f);
+    
+    const client = await getClient();
     try {
-      await query(sql);
+      await client.query('BEGIN');
+
+      for (const f of files) {
+        if (!seed && /seed/i.test(f)) {
+          console.log('[migrate] skip seed:', f);
+          continue;
+        }
+        const sql = await fs.readFile(path.join(migDir, f), 'utf8');
+        console.log('[migrate] applying:', f);
+        await client.query(sql);            // ← any error here aborts
+      }
+
+      await client.query('COMMIT');
     } catch (error) {
-      console.error(`[migrate] FAILED: ${f} -> ${error.message}`);
-      throw error;
+      await client.query('ROLLBACK');
+      console.error('[migrate] FAILED while applying migrations:', e.message);
+      throw e;
+    } finally {
+      client.release();
     }
 
-    // Assert the retention functions exist (so tests won’t blow up later)
-    const check = await query(`
+    // Now that ALL migrations ran, assert retention functions exist
+    const { rows = [], rowCount = 0 } = await (await getClient()).query(`
       SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname='public'
-        AND p.proname IN ('prune_crew_metric_age_with_floor','prune_crew_event_age_with_floor')
+      WHERE p.proname IN (
+        'prune_crew_metric_age_with_floor',
+        'prune_crew_event_age_with_floor'
+      )
+        AND n.nspname = 'public'
       ORDER BY 1;
-    `);
-    if (check.rowCount < 2) {
+    `).finally(c => c?.release?.());
+
+    if (rowCount < 2) {
+      console.error('[migrate] functions found so far:', rows.map(r => `${r.proname}(${r.args})`));
       throw new Error('[migrate] retention functions missing in DB. Did 004_retention.sql actually create them?');
-    } else {
-      console.log('[migrate] retention functions present:', check.rows.map(r => `${r.proname}(${r.args})`));
     }
-  }
-
-  // backend/database/init.js
-  const filesToLog = (await fs.readdir(migDir)).filter(f => f.endsWith('.sql')).sort();
-  console.log('[migrate] files:', filesToLog);
-
+    console.log('[migrate] retention functions present:', rows.map(r => `${r.proname}(${r.args})`));
 }

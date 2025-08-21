@@ -11,12 +11,12 @@ help:
 	awk 'BEGIN {FS = ":.*?## "}; /^[a-zA-Z0-9_.-]+:.*?## / {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 up: ## docker compose up -d (build & wait for health)
-	$(DC) up --build -d
+	$(DC) up --build -d $(SERVICES)
 	@echo "Waiting for services to be healthy..."; \
 	$(DC) ps
 
 down: ## docker compose down (remove orphans)
-	$(DC) down --remove-orphans
+	$(DC) down --remove-orphans $(SERVICES)
 
 ps: ## docker compose ps
 	$(DC) ps
@@ -41,8 +41,10 @@ reset-db: ## remove pgdata volume (DANGEROUS)
 	-$(DOCKER) volume rm $$(basename $$PWD)_pgdata || true
 
 ## -- Backend Test within Container -- ##
-container-test: 
-	docker compose --profile test run --rm api-tests sh -lc "pnpm test -- --runInBand --detectOpenHandles"
+cli-test:
+	docker compose --profile test up -d db
+	docker compose --profile test run --rm api-tests sh -lc 'pnpm test -- --ci --runInBand --detectOpenHandles'
+	docker compose --profile test down -v
 
 ## -- Frontend -- ## 
 # Variables

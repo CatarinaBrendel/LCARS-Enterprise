@@ -6,7 +6,8 @@ test('retention prunes by age and keeps a floor per (crew,metric)', async () => 
   try {
     const crewId =
       (await c.query('SELECT id FROM crew LIMIT 1')).rows[0]?.id ??
-      (await c.query('INSERT INTO crew DEFAULT VALUES RETURNING id')).rows[0].id;
+      (await c.query('INSERT INTO crew (name, role, deck_zone, active) VALUES ($1, $2, $3, $4) RETURNING id',
+        ['Test Crew', 'Ops', 'Cargo', true])).rows[0].id;
 
     await c.query('BEGIN');
     await c.query('TRUNCATE crew_metric, crew_event RESTART IDENTITY');
