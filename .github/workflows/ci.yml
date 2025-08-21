@@ -84,14 +84,23 @@ jobs:
         env:
           INGEST_TOKEN: dev_only_change_me_please   # pass whatever your tests expect
         run: |
-          # start only the db (detached, with healthcheck)
+          # 1) start only the DB for the test profile
           docker compose --profile test up -d db
 
-          # run tests in a one-off container, exit on Jest exit
+          # 2) wait for DB and ensure appdb_test exists (run psql inside the db container)
+          docker compose exec -T -e PGPASSWORD=app db sh -lc '
+            echo "[ci] waiting for postgres...";
+            until pg_isready -U app -d postgres >/dev/null 2>&1; do sleep 1; done;
+            echo "[ci] ensuring appdb_test exists...";
+            psql -U app -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='\''appdb_test'\''" | grep -q 1 \
+              || psql -U app -d postgres -c "CREATE DATABASE appdb_test OWNER app"
+          '
+
+          # 3) run tests in a one-off container; exits when Jest exits
           docker compose --profile test run --rm api-tests \
             sh -lc 'pnpm test -- --ci --runInBand --detectOpenHandles'
 
-          # tear everything down (cleanup db + volumes)
+          # 4) tear down
           docker compose --profile test down -v
       
       - name: Dump container logs on failure
