@@ -7,6 +7,7 @@ on:
       - "backend/**"
       - "frontend/**"
       - ".github/workflows/ci.yml"
+      - "docker-compose.yml"
   pull_request:
     branches: [ main ]
     paths:
@@ -35,7 +36,7 @@ jobs:
     env:
       NODE_ENV: test
       DATABASE_URL: postgres://app:app@localhost:5432/appdb_test
-      INGEST_TOKEN: dev_only
+      INGEST_TOKEN: dev_only_change_me_please
     
     defaults:
       run:
@@ -43,6 +44,9 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+        with:
+            lfs: true
+            submodules: false
 
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
@@ -63,7 +67,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
-
+          
       - name: Create appdb_test
         env:
           PGPASSWORD: app
@@ -71,8 +75,25 @@ jobs:
           psql -h localhost -U app -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='appdb_test'" | grep -q 1 \
             || psql -h localhost -U app -d postgres -c "CREATE DATABASE appdb_test OWNER app"
 
-      - name: Test
-        run: pnpm test
+      - name: "Pre-flight: show migrations"
+        working-directory: backend
+        run: echo "== ls backend/database/migrations ==" && ls -la database/migrations || true && echo "== grep retention ==" && grep -nH "prune_crew_metric_age_with_floor" database/migrations/* || true && echo "== git-tracked files ==" && git ls-files database/migrations
+
+      - name: Run backend tests (docker compose)
+        env:
+          INGEST_TOKEN: dev_only_change_me_please   # pass whatever your tests expect
+        run: |
+          docker compose --profile test up \
+            --build \
+            --abort-on-container-exit \
+            --exit-code-from api-tests
+      
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          docker compose logs api-tests || true
+          docker compose logs api || true
+          docker compose logs db || true
 
   frontend:
     name: Frontend (lint & build)
