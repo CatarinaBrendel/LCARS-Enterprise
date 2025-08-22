@@ -1,10 +1,10 @@
 import '../loadEnv.js';
 import http from 'http';
-import { Server as SocketIOServer } from 'socket.io';
 import app from './app.js';
 import { ensureSchema } from '../database/init.js';
 import cron from 'node-cron';
 import { runRetentionOnce } from './retention.js';
+import { initWebSocket } from './websocket.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const HOST = process.env.HOST || '0.0.0.0'; 
@@ -15,22 +15,8 @@ const STARTUP_SEED = String(process.env.STARTUP_SEED || 'false') === 'true';
 let ready = false; // flips true when DB is usable
 
 const server = http.createServer(app);
-const io = new SocketIOServer(server, {
-  cors: { origin: CORS_ORIGIN, credentials: true }
-});
 
-io.on('connection', (socket) => {
-  console.log('socket connected', socket.id);
-  socket.emit('hello', { message: 'Welcome!' });
-
-  const interval = setInterval(() => {
-    socket.emit('tick', { at: new Date().toISOString() });
-  }, 5000);
-
-  socket.on('disconnect', () => clearInterval(interval));
-});
-
-// tiny helper
+// Helpers
 const withTimeout = (p, ms, label) =>
   Promise.race([
     p,
@@ -38,6 +24,13 @@ const withTimeout = (p, ms, label) =>
       setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms)
     ),
   ]);
+
+// Websockets
+const { io, emitTelemetry, emitCrewEvent } = initWebSocket(server, {
+  corsOrigin: CORS_ORIGIN,
+});
+
+app.set("ws", { io, emitTelemetry, emitCrewEvent });
 
 async function start() {
   const dbname = new URL(process.env.DATABASE_URL).pathname.replace(/^\//,'');
