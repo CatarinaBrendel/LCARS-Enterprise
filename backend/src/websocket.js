@@ -12,10 +12,11 @@ import { Server } from "socket.io";
  *   'telemetry:unsubscribe' { crewId? , metrics? } // leave rooms
  */
 
-export function initWebSocket(httpServer) {
+export function initWebSocket(httpServer, {corsOrigin}) {
   const io = new Server(httpServer, {
-    cors: { origin: "*" }, // tighten to Vite/Electron origins later
-    path: "/ws",           // avoids clashing with default
+    cors: { origin: corsOrigin, credentials: true },
+    path: "/ws",
+    transports: ["websocket"],
   });
 
   // Namespaces (optional): keep it simple for now

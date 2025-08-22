@@ -6,6 +6,7 @@ import LcarsHeaderBar from "./components/LcarsHeaderBar";
 import LcarsCard from "./components/LcarsCard";
 import LcarsMeter from "./components/LcarsMeter";
 import EnterpriseMap from "./assets/sovereign2.jpg";
+import LivePanel from './components/LivePanel';
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
@@ -25,21 +26,7 @@ export default function App() {
             />
           ) : (
               <div className="px-6 py-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              <LcarsCard title="Crew Biometrics">
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span>On Duty</span><span>8</span>
-                  </div>
-                  <div>
-                    <div className="mb-1">Heart Rate</div>
-                    <LcarsMeter value={72} />
-                  </div>
-                  <div>
-                    <div className="mb-1">Stress Index</div>
-                    <LcarsMeter value={40} color="amber" />
-                  </div>
-                </div>
-                </LcarsCard>
+              <LivePanel />
 
                 <LcarsCard title="Impulse Engines">
                   <div className="space-y-3 text-sm">
