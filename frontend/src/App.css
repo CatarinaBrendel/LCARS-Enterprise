@@ -49,4 +49,12 @@
     background: rgb(var(--lcars-amber));
     border-radius: 9999px;
   }
+
+  @keyframes lcars-flash {
+    0%   { box-shadow: 0 0 0 0 rgba(255,179,71,.75); } /* amber glow */
+    100% { box-shadow: 0 0 0 0 rgba(255,179,71,0); }
+  }
+  .flash-once {
+    animation: lcars-flash 600ms ease-out 1;
+  }
 }

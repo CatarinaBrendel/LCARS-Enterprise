@@ -1,5 +1,4 @@
 import './App.css'
-import CrewStatus from './components/CrewStatus'
 import { useState } from "react";
 import LcarsSidebar from "./components/LcarsSidebar";
 import LcarsHeaderBar from "./components/LcarsHeaderBar";

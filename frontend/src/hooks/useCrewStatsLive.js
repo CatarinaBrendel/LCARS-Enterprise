@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { socket, subscribeTelemetry, unsubscribeTelemetry } from "../lib/ws";
 
 /**
@@ -24,27 +24,29 @@ export default function useCrewStatsLive({ metrics = ["heart_rate","o2_sat","bod
     return () => { alive = false; };
   }, []);
 
-  // Index for quick updates
-  const indexById = useMemo(() => {
-    const m = new Map();
-    for (const r of rows) m.set(r.crewId, r);
-    return m;
-  }, [rows]);
-
-  // Socket handlers
   const onTelemetry = useCallback((evt) => {
-    // evt: { crewId, metric, value, unit, ts }
     if (!evt?.crewId || !evt?.metric) return;
     if (!metrics.includes(evt.metric)) return;
 
     setRows(prev => {
-      // copy map to avoid mutating
-      const map = new Map();
-      for (const r of prev) map.set(r.crewId, { ...r });
-
+      const map = new Map(prev.map(r => [r.crewId, { ...r }]));
       const cur = map.get(evt.crewId) || { crewId: evt.crewId, name: `#${evt.crewId}` };
-      cur[evt.metric] = evt.value;
+
+      const key = evt.metric;
+      const prevVal = typeof cur[key] === "number" ? cur[key] : null;
+      const nextVal = evt.value;
+
+      cur[key] = nextVal;
       cur.ts = evt.ts || cur.ts;
+
+      // trend + “changed recently” timestamp
+      let trend = "flat";
+      if (prevVal != null && nextVal != null) {
+        if (nextVal > prevVal) trend = "up";
+        else if (nextVal < prevVal) trend = "down";
+      }
+      cur[`${key}_trend`] = trend;
+      cur[`${key}_changed_at`] = Date.now();
 
       map.set(evt.crewId, cur);
       return Array.from(map.values()).sort((a, b) => a.crewId - b.crewId);

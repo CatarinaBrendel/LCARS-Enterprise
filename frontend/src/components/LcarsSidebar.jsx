@@ -1,8 +1,8 @@
 import LcarsPillButton from "./LcarsPillButton";
 
-export default function LcarsSidebar({ current = "dashboard", onSelect = () => {} }) {
+export default function LcarsSidebar({ current = "dashboard", onSelect = () => {}, className = "" }) {
   return (
-    <aside className="w-64 shrink-0 space-y-4 p-4 pt-6">
+    <aside className={`w-64 shrink-0 space-y-4 p-4 pt-6 ${className}`}>
       <div className="h-16 rounded-lcars bg-lcars-gold mb-4" />
       <LcarsPillButton color="gold"  isActive={current==='dashboard'} onClick={()=>onSelect('dashboard')}>Dashboard</LcarsPillButton>
       <LcarsPillButton color="blue"  isActive={current==='medical'}  onClick={()=>onSelect('medical')}>Medical</LcarsPillButton>
