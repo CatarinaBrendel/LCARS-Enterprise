@@ -3,7 +3,6 @@ import CrewStatus from './components/CrewStatus'
 import { useState } from "react";
 import LcarsSidebar from "./components/LcarsSidebar";
 import LcarsHeaderBar from "./components/LcarsHeaderBar";
-import EnterpriseMap from "./assets/sovereign2.jpg";
 import MedicalTab from './components/MedicalTab';
 import DashboardGrid from './components/DashboardGrid';
 
@@ -17,13 +16,8 @@ export default function App() {
         <main className="flex-1 relative">
             <LcarsHeaderBar />
 
-            {tab === "network" && (
-              <img
-                src={EnterpriseMap}
-                alt="Ship Blueprint"
-                className="absolute inset-0 w-full h-auto object-cover"
-                draggable={false}
-              />
+            {tab === "blueprint" && (
+              <div className="p-6 opacity-70">Ship Blueprint — coming soon</div>
             )}
 
             {tab === "dashboard" && <DashboardGrid />}

@@ -34,7 +34,7 @@ export default function MedicalTab() {
               <th className="text-left p-2 rounded-l-xl">Crew</th>
               <th className="text-right p-2">Heart Rate</th>
               <th className="text-right p-2">O₂ Sat</th>
-              <th className="text-right p-2 rounded-r-xl">Core Temp</th>
+              <th className="text-right p-2 rounded-r-xl">Body Temp</th>
             </tr>
           </thead>
           <tbody>

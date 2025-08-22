@@ -8,7 +8,7 @@ export default function LcarsSidebar({ current = "dashboard", onSelect = () => {
       <LcarsPillButton color="blue"  isActive={current==='medical'}  onClick={()=>onSelect('medical')}>Medical</LcarsPillButton>
       <LcarsPillButton color="amber"  isActive={current==='systems'}  onClick={()=>onSelect('systems')}>Ship Systems</LcarsPillButton>
       <LcarsPillButton color="copper" isActive={current==='logs'}      onClick={()=>onSelect('logs')}>Logs</LcarsPillButton>
-      <LcarsPillButton color="slate" isActive={current==='network'}   onClick={()=>onSelect('network')}>Ship Blueprint</LcarsPillButton>
+      <LcarsPillButton color="slate" isActive={current==='blueprint'}   onClick={()=>onSelect('blueprint')}>Ship Blueprint</LcarsPillButton>
     </aside>
   );
 }
