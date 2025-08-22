@@ -5,6 +5,7 @@ import { ensureSchema } from '../database/init.js';
 import cron from 'node-cron';
 import { runRetentionOnce } from './retention.js';
 import { initWebSocket } from './websocket.js';
+import { startSimulator } from './simulator.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const HOST = process.env.HOST || '0.0.0.0'; 
@@ -29,6 +30,12 @@ const withTimeout = (p, ms, label) =>
 const { io, emitTelemetry, emitCrewEvent } = initWebSocket(server, {
   corsOrigin: CORS_ORIGIN,
 });
+
+if (process.env.ENABLE_SIM === "true") {
+  startSimulator({ emitTelemetry, intervalMs: 1000 })
+    .then((stop) => app.set("simStop", stop))
+    .catch((err) => console.error("[sim] failed to start", err));
+}
 
 app.set("ws", { io, emitTelemetry, emitCrewEvent });
 

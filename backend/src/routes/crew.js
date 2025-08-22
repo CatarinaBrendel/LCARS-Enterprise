@@ -56,4 +56,48 @@ router.get('/crew/events', async (req, res) => {
   }
 });
 
+router.get('/crew/stats', async (req, res) => {
+  const metrics = req.query.metrics
+    ? req.query.metrics.split(',').map(s => s.trim()).filter(Boolean)
+    : null;
+
+  try {
+    const sql = `
+      WITH ranked AS (
+        SELECT
+          cm.crew_id,
+          cm.metric_name,
+          cm.value,
+          cm.text_value,
+          cm.unit,
+          cm.ts,
+          ROW_NUMBER() OVER (
+            PARTITION BY cm.crew_id, cm.metric_name
+            ORDER BY cm.ts DESC, cm.id DESC
+          ) AS rn
+        FROM crew_metric cm
+        ${metrics ? 'WHERE cm.metric_name = ANY($1)' : ''}
+      )
+      SELECT
+        c.id                AS "crewId",
+        c.name              AS "name",
+        MAX(CASE WHEN r.metric_name = 'heart_rate' THEN r.value END)     AS heart_rate,
+        MAX(CASE WHEN r.metric_name = 'o2_sat'     THEN r.value END)     AS o2_sat,
+        MAX(CASE WHEN r.metric_name = 'body_temp'  THEN r.value END)     AS body_temp,
+        MAX(r.ts)           AS ts
+      FROM crew c
+      LEFT JOIN ranked r
+        ON r.crew_id = c.id AND r.rn = 1
+      WHERE c.active = TRUE
+      GROUP BY c.id, c.name
+      ORDER BY c.id;
+    `;
+    const params = metrics ? [metrics] : [];
+    const rows = (await query(sql, params)).rows;
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: e.message });
+  }});
+
 export default router;

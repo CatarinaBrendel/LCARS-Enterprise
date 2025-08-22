@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query } from '../../../database/db.js';
 
 const ALLOWED_METRICS = new Set([
-  'heart_rate','o2_sat','stress_index','fatigue_index',
+  'heart_rate','o2_sat','stress_index','fatigue_index', 'body_temp',
   'location_zone','steps_per_min','task_load','suit_temp','radiation_dose'
 ]);
 

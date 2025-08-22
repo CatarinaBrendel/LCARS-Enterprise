@@ -30,4 +30,23 @@
   .bg-lcars-slate  { background-color: rgb(var(--lcars-slate)); }
   .lcars-text  { color: rgb(var(--lcars-text)); }
   .rounded-lcars {border-top-left-radius: 15px; border-top-right-radius: 15px; border-bottom-right-radius: 15px;}
+
+  .lcars-panel {
+    border-color: rgb(var(--lcars-amber)); /* thin amber outline */
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.35);
+    background: color-mix(in oklab, black 75%, transparent);
+  }
+
+  /* Thick LCARS header strip across the top */
+  .lcars-header-strip {
+    background: rgb(var(--lcars-amber));
+    color: black;
+  }
+
+  /* Skinny separator bar (amber line) */
+  .lcars-sep {
+    height: 6px;
+    background: rgb(var(--lcars-amber));
+    border-radius: 9999px;
+  }
 }
