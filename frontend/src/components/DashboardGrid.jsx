@@ -1,10 +1,13 @@
 import React from "react";
 import LcarsCard from "./LcarsCard";
 import LcarsMeter from "./LcarsMeter";
+import PresenceWidget from "./widgets/PresenceWidget";
 
 export default function DashboardGrid() {
   return (
-    <div className="px-6 py-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <PresenceWidget className="min-w-[300px]" />
+
       <LcarsCard title="Impulse Engines">
         <div className="space-y-3 text-sm">
           <div className="flex items-center justify-between"><span>Power</span><span>72%</span></div>
