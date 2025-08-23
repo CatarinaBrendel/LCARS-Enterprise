@@ -55,4 +55,10 @@
   .flash-once {
     animation: lcars-flash 600ms ease-out 1;
   }
+
+  @keyframes marquee { 
+    0%{ transform: translateX(0);} 
+    100%{ transform: translateX(-50%);} 
+  }
+
 }
