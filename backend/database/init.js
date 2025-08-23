@@ -39,28 +39,32 @@ export async function ensureSchema({ seed = false } = {}) {
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
-      console.error('[migrate] FAILED while applying migrations:', e.message);
-      throw e;
+      console.error('[migrate] FAILED while applying migrations:', error.message);
+      throw error;
     } finally {
       client.release();
     }
 
     // Now that ALL migrations ran, assert retention functions exist
-    const { rows = [], rowCount = 0 } = await (await getClient()).query(`
-      SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args
-      FROM pg_proc p
-      JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE p.proname IN (
-        'prune_crew_metric_age_with_floor',
-        'prune_crew_event_age_with_floor'
-      )
-        AND n.nspname = 'public'
-      ORDER BY 1;
-    `).finally(c => c?.release?.());
-
-    if (rowCount < 2) {
-      console.error('[migrate] functions found so far:', rows.map(r => `${r.proname}(${r.args})`));
-      throw new Error('[migrate] retention functions missing in DB. Did 004_retention.sql actually create them?');
+    const check = await getClient();
+    try {
+      const { rows = [], rowCount = 0 } = await check.query(`
+        SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE p.proname IN (
+          'prune_crew_metric_age_with_floor',
+          'prune_crew_event_age_with_floor'
+        )
+          AND n.nspname = 'public'
+        ORDER BY 1;
+      `);
+      if (rowCount < 2) {
+        console.error('[migrate] functions found so far:', rows.map(r => `${r.proname}(${r.args})`));
+        throw new Error('[migrate] retention functions missing in DB. Did 004_retention.sql actually create them?');
+      }
+      console.log('[migrate] retention functions present:', rows.map(r => `${r.proname}(${r.args})`));
+    } finally {
+      check.release();
     }
-    console.log('[migrate] retention functions present:', rows.map(r => `${r.proname}(${r.args})`));
 }

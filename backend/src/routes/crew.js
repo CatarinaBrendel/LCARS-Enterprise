@@ -56,6 +56,7 @@ router.get('/crew/events', async (req, res) => {
   }
 });
 
+// GET api/crew/stats
 router.get('/crew/stats', async (req, res) => {
   const metrics = req.query.metrics
     ? req.query.metrics.split(',').map(s => s.trim()).filter(Boolean)
@@ -99,5 +100,27 @@ router.get('/crew/stats', async (req, res) => {
     console.error(e);
     res.status(500).json({ ok: false, error: e.message });
   }});
+
+// GET api/crew/presence
+router.get('/crew/presence', async (req, res, next) => {
+  try {
+    const { rows } = await query(`
+      SELECT
+        id              AS "crewId",
+        name,
+        role,
+        deck_zone       AS "deck_zone",
+        on_duty         AS "onDuty",
+        busy            AS "busy",
+        updated_at      AS "ts"
+      FROM crew
+      WHERE active = TRUE
+      ORDER BY name;
+    `);
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;

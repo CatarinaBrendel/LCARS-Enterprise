@@ -6,6 +6,7 @@ import cron from 'node-cron';
 import { runRetentionOnce } from './retention.js';
 import { initWebSocket } from './websocket.js';
 import { startSimulator } from './simulator.js';
+import {startPresenceSimulator} from './presenceSimulator.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const HOST = process.env.HOST || '0.0.0.0'; 
@@ -27,7 +28,7 @@ const withTimeout = (p, ms, label) =>
   ]);
 
 // Websockets
-const { io, emitTelemetry, emitCrewEvent } = initWebSocket(server, {
+const { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceUpdate } = initWebSocket(server, {
   corsOrigin: CORS_ORIGIN,
 });
 
@@ -35,9 +36,13 @@ if (process.env.ENABLE_SIM === "true") {
   startSimulator({ emitTelemetry, intervalMs: 1000 })
     .then((stop) => app.set("simStop", stop))
     .catch((err) => console.error("[sim] failed to start", err));
+
+  startPresenceSimulator({ emitPresenceUpdate, emitPresenceSummary })
+    .then((stop) => app.set("simStopPresence", stop))
+    .catch((err) => console.error("[sim] presence failed to start", err));
 }
 
-app.set("ws", { io, emitTelemetry, emitCrewEvent });
+app.set("ws", { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceSummary });
 
 async function start() {
   const dbname = new URL(process.env.DATABASE_URL).pathname.replace(/^\//,'');

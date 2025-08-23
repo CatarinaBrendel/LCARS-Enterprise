@@ -5,6 +5,8 @@ import { Server } from "socket.io";
  * - server → client:
  *   'telemetry:update' { crewId, metric, value, unit, ts }
  *   'event:crew'       { crewId, type, message, ts }
+ *   'presence:update'   { crewId, onDuty, busy, deck_zone, ts }
+ *   'presence:summary'  { total, onDuty, busy, busyPct, ts }
  *   'hello'            { serverTime }
  *
  * - client → server:
@@ -58,5 +60,16 @@ export function initWebSocket(httpServer, {corsOrigin}) {
     if (crewId) io.to(`crew:${crewId}`).emit("event:crew", payload);
   }
 
-  return { io, emitTelemetry, emitCrewEvent };
+  function emitPresenceUpdate({ crewId, onDuty, busy, deck_zone, ts = new Date() }) {
+    const payload = { crewId, onDuty, busy, deck_zone, ts };
+    io.emit("presence:update", payload);
+    if (crewId) io.to(`crew:${crewId}`).emit("presence:update", payload);
+  }
+
+  function emitPresenceSummary({ total, onDuty, busy, busyPct, ts = new Date() }) {
+    const payload = { total, onDuty, busy, busyPct, ts };
+    io.emit("presence:summary", payload);
+  }
+
+  return { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceUpdate };
 }

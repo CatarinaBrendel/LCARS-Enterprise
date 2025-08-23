@@ -42,9 +42,10 @@ reset-db: ## remove pgdata volume (DANGEROUS)
 
 ## -- Backend Test within Container -- ##
 cli-test:
-	docker compose --profile test up -d db
-	docker compose --profile test run --rm api-tests sh -lc 'pnpm test -- --ci --runInBand --detectOpenHandles'
-	docker compose --profile test down -v
+	COMPOSE_PROJECT_NAME=lcars-enterprise docker compose --profile test up -d db migrate-test
+	COMPOSE_PROJECT_NAME=lcars-enterprise docker compose --profile test run --rm --no-deps api-tests
+	COMPOSE_PROJECT_NAME=lcars-enterprise docker compose --profile test down -v --remove-orphans
+
 
 ## -- Frontend -- ## 
 # Variables

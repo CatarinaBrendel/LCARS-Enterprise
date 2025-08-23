@@ -5,10 +5,9 @@ services:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
       POSTGRES_DB: appdb
-    # ⚠️ Only expose to host if you really need it; otherwise remove this line
-    # ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1 -p 5432"]
       interval: 52s
@@ -17,6 +16,19 @@ services:
       start_period: 5s
     restart: unless-stopped
     profiles: ["test", "dev", "prod"]
+
+  migrate-dev:
+    image: node:20-alpine
+    working_dir: /usr/src/app
+    volumes:
+      - .:/usr/src/app
+    environment:
+      DATABASE_URL: postgres://app:app@db:5432/appdb
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -lc "node backend/scripts/migrate.js"
+    profiles: ["dev"]
 
   api:
     build:
@@ -40,8 +52,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate-dev:
+        condition: service_completed_successfully
     healthcheck:
-      # Use Node itself for health (no curl/wget dependency needed)
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 5s
       timeout: 5s
@@ -109,20 +122,48 @@ services:
     command:
       - /bin/sh
       - -lc
-      - >
-        set -e;
-        echo "[tests] waiting for db...";
-        until pg_isready -h db -U app -d postgres >/dev/null 2>&1; do sleep 1; done;
-        echo "[tests] db is ready";
-        echo "[tests] ensuring appdb_test exists...";
-        psql -h db -U app -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='appdb_test'" | grep -q 1 \
-          || psql -h db -U app -d postgres -c "CREATE DATABASE appdb_test OWNER app";
-        echo "[tests] running jest...";
-        pnpm test -- --ci --runInBand --detectOpenHandles;
-        echo "[tests] jest finished";
+      - |
+        set -e
+        apk add --no-cache postgresql-client >/dev/null
+        echo "[tests] waiting for db..."
+        until pg_isready -h db -U app -d postgres >/dev/null 2>&1; do sleep 1; done
+        echo "[tests] db is ready"
+        echo "[tests] ensuring appdb_test exists..."
+        if ! psql -h db -U app -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='appdb_test'" | grep -q 1; then
+          psql -h db -U app -d postgres -c "CREATE DATABASE appdb_test OWNER app"
+        fi
+        echo "[tests] running jest..."
+        pnpm test -- --ci --runInBand --detectOpenHandles
+        echo "[tests] jest finished"
     depends_on:
       db:
         condition: service_healthy
+      migrate-test:
+        condition: service_completed_successfully
+    profiles: ["test"]
+
+  migrate-test:
+    image: node:20-alpine
+    working_dir: /usr/src/app
+    volumes:
+      - .:/usr/src/app
+    environment:
+      DATABASE_URL: postgres://app:app@db:5432/appdb_test
+      PGPASSWORD: app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -lc "
+        apk add --no-cache postgresql-client >/dev/null;
+        echo '[migrate-test] waiting for db...';
+        until pg_isready -h db -U app -d postgres >/dev/null 2>&1; do sleep 1; done;
+        echo '[migrate-test] ensuring appdb_test exists...';
+        if ! psql -h db -U app -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='appdb_test'\" | grep -q 1; then
+          psql -h db -U app -d postgres -c \"CREATE DATABASE appdb_test OWNER app\";
+        fi;
+        node backend/scripts/migrate.js
+      "
     profiles: ["test"]
 
  # Prod API (no bind mount; uses Dockerfile prod target)
@@ -142,8 +183,15 @@ services:
       db:
         condition: service_healthy
     ports: ["3001:3001"]
+    command: sh -lc "node backend/scripts/migrate.js && node backend/src/index.js"
     profiles: ["prod"]
 
 volumes:
   pgdata:
   pnpm-store:
+
+networks:
+  default:
+    name: lcars-enterprise_testnet   # static, reused across all test runs
+    driver: bridge
+
