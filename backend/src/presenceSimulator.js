@@ -86,6 +86,14 @@ export async function startPresenceSimulator({ emitPresenceUpdate, emitPresenceS
     emitPresenceSummary({ total: s?.total || 0, onDuty: s?.onDuty || 0, busy: s?.busy || 0, busyPct, ts: new Date().toISOString() });
   }, SUMMARY_MS);
 
+  const { rows: treatedIds } = await query(`
+    SELECT DISTINCT crew_id FROM triage_visit
+    WHERE ended_at IS NULL AND state IN ('admitted','under_treatment')
+  `);
+  const treatedSet = new Set(treatedIds.map(r => r.crew_id));
+
+  const sample = crew.filter(r => !treatedSet.has(r.id)); // don't toggle those in treatment
+
   // kick off
   setTimeout(tick, jitter(TICK_MS_MIN, TICK_MS_MAX));
 

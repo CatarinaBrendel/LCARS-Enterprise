@@ -46,6 +46,13 @@ services:
       STARTUP_MIGRATE: background   # background | block | off
       STARTUP_SEED: "true"
       ENABLE_SIM: "true"
+      ENABLE_TRIAGE_SIM: "true"
+      TRIAGE_SIM_INTERVAL_MS: "10000"
+      TRIAGE_SIM_ADMIT_CHANCE: "0.25"
+      TRIAGE_SIM_MAX: "3"
+      ENABLE_PRESENCE_SUMMARY: "true"
+      PRESENCE_SUMMARY_INTERVAL_MS: 10000
+
     volumes:
       - ./backend:/usr/src/app
     command: ["pnpm","dev"]

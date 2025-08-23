@@ -106,21 +106,40 @@ router.get('/crew/presence', async (req, res, next) => {
   try {
     const { rows } = await query(`
       SELECT
-        id              AS "crewId",
-        name,
-        role,
-        deck_zone       AS "deck_zone",
-        on_duty         AS "onDuty",
-        busy            AS "busy",
-        updated_at      AS "ts"
-      FROM crew
-      WHERE active = TRUE
-      ORDER BY name;
+        c.id AS "crewId",
+        c.name,
+        c.role,
+        EXISTS (
+          SELECT 1 FROM triage_visit tv
+          WHERE tv.crew_id = c.id
+            AND tv.ended_at IS NULL
+            AND tv.state IN ('admitted','under_treatment')
+        ) AS "inTreatment",
+        CASE WHEN EXISTS (
+          SELECT 1 FROM triage_visit tv
+          WHERE tv.crew_id = c.id
+            AND tv.ended_at IS NULL
+            AND tv.state IN ('admitted','under_treatment')
+        ) THEN 'Sickbay' ELSE c.deck_zone END AS "deck_zone",
+        (c.on_duty AND NOT EXISTS (
+          SELECT 1 FROM triage_visit tv
+          WHERE tv.crew_id = c.id
+            AND tv.ended_at IS NULL
+            AND tv.state IN ('admitted','under_treatment')
+        )) AS "onDuty",
+        ((c.busy OR EXISTS (
+          SELECT 1 FROM triage_visit tv
+          WHERE tv.crew_id = c.id
+            AND tv.ended_at IS NULL
+            AND tv.state IN ('admitted','under_treatment')
+        ))) AS "busy",
+        c.updated_at AS "ts"
+      FROM crew c
+      WHERE c.active = TRUE
+      ORDER BY c.name;
     `);
     res.json(rows);
-  } catch (err) {
-    next(err);
-  }
+  } catch (e) { next(e); }
 });
 
 export default router;

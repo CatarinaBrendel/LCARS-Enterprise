@@ -60,9 +60,10 @@ export function initWebSocket(httpServer, {corsOrigin}) {
     if (crewId) io.to(`crew:${crewId}`).emit("event:crew", payload);
   }
 
-  function emitPresenceUpdate({ crewId, onDuty, busy, deck_zone, ts = new Date() }) {
+ function emitPresenceUpdate({ crewId, onDuty, busy, deck_zone, ts = new Date() }) {
     const payload = { crewId, onDuty, busy, deck_zone, ts };
-    io.emit("presence:update", payload);
+    io.emit("presence:update", payload);               // everyone
+    io.to("presence").emit("presence:update", payload); // subscribers
     if (crewId) io.to(`crew:${crewId}`).emit("presence:update", payload);
   }
 
