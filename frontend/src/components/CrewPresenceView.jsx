@@ -23,7 +23,7 @@ export default function CrewPresenceView({onSelectCrew}) {
     onDutyCount,
     busyCount,
     busyPctOfOnDuty,
-    treatmentCount,          // ← NEW
+    treatmentCount,
     total,
   } = usePresence();
 
@@ -34,7 +34,7 @@ export default function CrewPresenceView({onSelectCrew}) {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 overflow-hidden">
       {/* Summary header */}
       <div className="grid grid-cols-4 gap-3">{/* ← was 3, now 4 to include Treatment */}
         <Card title="On Duty">
@@ -56,7 +56,7 @@ export default function CrewPresenceView({onSelectCrew}) {
       </div>
 
       {/* Presence table */}
-      <div className="rounded-2xl border border-[#f2a007]/70 p-3">
+      <div className="rounded-2xl h-[60vh] overflow-auto border border-[#f2a007]/70 p-3">
         <table className="w-full text-left">
           <thead className="text-[#f2a007] uppercase text-sm">
             <tr className="[&>th]:py-2 [&>th]:px-2">

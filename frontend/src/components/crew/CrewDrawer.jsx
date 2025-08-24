@@ -102,7 +102,7 @@ function Row({ label, value, spark }) {
   return (
     <div className="flex items-center justify-between py-2 border-t border-zinc-800 first:border-t-0">
       <div className="text-zinc-400 text-sm">{label}</div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-8">
         {spark}
         <div className="font-semibold tabular-nums">{value}</div>
       </div>

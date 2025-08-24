@@ -14,5 +14,15 @@ VALUES
   ('R. La''An',      'Security',    'Bridge'),
   ('A. Rutherford',  'Engineering', 'Engineering'),
   ('T. Paris',       'Ops',         'Cargo'),
-  ('K. Bashir',      'Medical',     'MedBay')
+  ('K. Bashir',      'Medical',     'MedBay'),
+  ('J. Kirk',       'Captain',     'Bridge'),
+  ('S. Kira',       'Ops',         'Habitat'),
+  ('T. Tuvok',      'Security',    'Bridge'),
+  ('E. Dax',        'Science',     'Lab'),
+  ('M. Reed',       'Security',    'Armory'),
+  ('P. Sato',       'Communications', 'Bridge'),
+  ('C. Crusher',    'Medical',     'MedBay'),
+  ('G. Data',       'Science',     'Lab'),
+  ('H. Kim',        'Ops',         'Cargo'),
+  ('S. Scotty',     'Engineering', 'Engineering')
 ON CONFLICT DO NOTHING;
