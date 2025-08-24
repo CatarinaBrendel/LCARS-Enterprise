@@ -44,12 +44,17 @@ test('POST /api/triage/visits admits a crew member (under_treatment)', async () 
   // Presence should reflect OFF-duty + Sickbay (effective)
   const p = await request(app).get('/api/crew/presence');
   expect(p.status).toBe(200);
+
   const row = p.body.find(r => r.crewId === crewId);
   expect(row).toBeTruthy();
-  expect(row.onDuty).toBe(false);
-  expect(row.busy).toBe(true);            // effective busy while treated
-  expect(row.deck_zone).toBe('Sickbay');  // effective location
+
+  // NEW expectations with the inTreatment model
+  expect(row.inTreatment).toBe(true);      // patient flag set
+  expect(row.onDuty).toBe(false);          // patients are never on duty
+  expect(row.busy).toBe(false);            // patients are never counted as "busy (working)"
+  expect(row.deck_zone).toBe('Sickbay');   // effective location
 });
+
 
 test('GET /api/triage/visits lists the active visit', async () => {
   const res = await request(app).get('/api/triage/visits');

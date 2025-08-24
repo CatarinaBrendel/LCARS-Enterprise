@@ -102,43 +102,54 @@ router.get('/crew/stats', async (req, res) => {
   }});
 
 // GET api/crew/presence
+// backend/src/routes/crew.js
 router.get('/crew/presence', async (req, res, next) => {
   try {
     const { rows } = await query(`
+      WITH crew_with_treatment AS (
+        SELECT
+          c.id         AS "crewId",
+          c.name,
+          c.role,
+          c.on_duty    AS "raw_onDuty",
+          c.busy       AS "raw_busy",
+          c.deck_zone  AS "raw_zone",
+          c.updated_at AS "ts",
+          EXISTS (
+            SELECT 1 FROM triage_visit tv
+            WHERE tv.crew_id = c.id
+              AND tv.ended_at IS NULL
+              AND tv.state IN ('admitted','under_treatment')
+          ) AS "inTreatment"
+        FROM crew c
+        WHERE c.active = TRUE
+      )
       SELECT
-        c.id AS "crewId",
-        c.name,
-        c.role,
-        EXISTS (
-          SELECT 1 FROM triage_visit tv
-          WHERE tv.crew_id = c.id
-            AND tv.ended_at IS NULL
-            AND tv.state IN ('admitted','under_treatment')
-        ) AS "inTreatment",
-        CASE WHEN EXISTS (
-          SELECT 1 FROM triage_visit tv
-          WHERE tv.crew_id = c.id
-            AND tv.ended_at IS NULL
-            AND tv.state IN ('admitted','under_treatment')
-        ) THEN 'Sickbay' ELSE c.deck_zone END AS "deck_zone",
-        (c.on_duty AND NOT EXISTS (
-          SELECT 1 FROM triage_visit tv
-          WHERE tv.crew_id = c.id
-            AND tv.ended_at IS NULL
-            AND tv.state IN ('admitted','under_treatment')
-        )) AS "onDuty",
-        ((c.busy OR EXISTS (
-          SELECT 1 FROM triage_visit tv
-          WHERE tv.crew_id = c.id
-            AND tv.ended_at IS NULL
-            AND tv.state IN ('admitted','under_treatment')
-        ))) AS "busy",
-        c.updated_at AS "ts"
-      FROM crew c
-      WHERE c.active = TRUE
-      ORDER BY c.name;
+        "crewId",
+        name,
+        role,
+        "inTreatment",
+        -- effective flags/zone:
+        (NOT "inTreatment" AND "raw_onDuty")                        AS "onDuty",
+        (NOT "inTreatment" AND "raw_onDuty" AND "raw_busy")         AS "busy",
+        (CASE WHEN "inTreatment" THEN 'Sickbay' ELSE "raw_zone" END) AS "deck_zone",
+        "ts"
+      FROM crew_with_treatment
+      ORDER BY name;
     `);
-    res.json(rows);
+
+    const mapped = rows.map(r => ({
+      crewId: r.crewId,
+      name: r.name,
+      role: r.role,
+      inTreatment: r.inTreatment,
+      onDuty: r.onDuty,
+      busy: r.busy,
+      deck_zone: r.deck_zone,
+      ts: r.ts instanceof Date ? r.ts.toISOString() : r.ts,
+    }));
+
+    res.json(mapped);
   } catch (e) { next(e); }
 });
 

@@ -3,6 +3,46 @@ import { computeEffectiveSummary } from '../presence/service.js';
 
 const CHANNELS = ['triage_presence', 'triage_change'];
 
+async function fetchVisitWithName(visitId, logger) {
+  let c;
+  try {
+    c = await getClient();
+    const { rows } = await c.query(`
+      SELECT v.id,
+             v.crew_id      AS "crewId",
+             c.first_name   AS "first_name",
+             c.last_name    AS "last_name",
+             c.name         AS "full_name",   -- in case you only store one field
+             v.state, v.acuity, v.bed, v.ended_at
+        FROM triage_visit v
+        JOIN crew c ON c.id = v.crew_id
+       WHERE v.id = $1
+    `, [visitId]);
+    return rows[0] || null;
+  } catch (e) {
+    logger?.error?.('[triage listener] fetchVisitWithName error:', e.message);
+    return null;
+  } finally {
+    try { c?.release?.(); } catch {}
+  }
+}
+
+// helper: standardize display name once
+function makeDisplayName(row) {
+  const given = row?.first_name ?? row?.given_name ?? null;
+  const surname = row?.last_name ?? row?.surname ?? null;
+  if (surname && given) return `${surname}, ${given}`;
+  if (surname) return surname;
+  if (given) return given;
+  const full = row?.full_name ?? row?.name ?? null;
+  if (typeof full === 'string' && full.trim()) {
+    const parts = full.trim().split(/\s+/);
+    if (parts.length >= 2) return `${parts.at(-1)}, ${parts.slice(0, -1).join(' ')}`;
+    return full;
+  }
+  return row?.crewId ? `#${row.crewId}` : '—';
+}
+
 export function startTriagePresenceListener({ emitPresenceUpdate, io, logger = console }) {
   let stopped = false;
   let client = null;
@@ -19,13 +59,23 @@ export function startTriagePresenceListener({ emitPresenceUpdate, io, logger = c
         try {
           const payload = JSON.parse(msg.payload || '{}');
 
-          if (msg.channel === 'triage_presence' && payload.crewId) {
-            const p = await computeEffectiveSummary(payload.crewId);
-            if (p) emitPresenceUpdate(p);
-          }
-
           if (msg.channel === 'triage_change') {
-            // Optional: fan out triage UI updates if you want them live
+            // 1) Enrich with crew name from DB (single SELECT by visit id)
+            if (payload?.id) {
+              const row = await fetchVisitWithName(payload.id, logger);
+              if (row) {
+                const enriched = {
+                  ...payload,
+                  ...row, // ensures crewId/state/acuity/bed/ended_at are present
+                  name: row.full_name,                 // keep legacy "name" if you have it
+                  displayName: makeDisplayName(row),   // normalized "Surname, Given"
+                };
+                io?.emit?.('triage:update', enriched);
+                return;
+              }
+            }
+            
+            // 2) Fallback: emit what we got (no name). Frontend can keep prior displayName.
             io?.emit?.('triage:update', payload);
           }
         } catch (e) {

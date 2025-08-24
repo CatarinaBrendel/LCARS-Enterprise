@@ -1,22 +1,24 @@
-export default function LcarsSubnav({ value, onChange }) {
-  const Item = ({ id, label }) => (
-    <button
-      onClick={() => onChange(id)}
-      className={[
-        'px-4 py-2 rounded-l-full rounded-r-full uppercase tracking-wider text-sm font-semibold',
-        value === id
-          ? 'bg-[#f2a007] text-black shadow-md'
-          : 'bg-[#2a2a2a] text-[#f2a007] hover:bg-[#3a3a3a]'
-      ].join(' ')}
-      aria-pressed={value === id}
-    >
-      {label}
-    </button>
-  );
+// frontend/src/components/LcarsSubnav.jsx
+export default function LcarsSubnav({ value, onChange, items = [
+  { id: "status", label: "STATUS" },
+  { id: "presence", label: "PRESENCE" },
+  { id: "triage", label: "TRIAGE" },
+]}) {
   return (
-    <div className="flex gap-2 items-center">
-      <Item id="status"   label="Crew Status" />
-      <Item id="presence" label="Crew Presence" />
-    </div>
+    <nav className="flex gap-2">
+      {items.map(t => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className={`px-3 py-1 rounded-md font-bold tracking-widest ${
+            value === t.id
+              ? "bg-[rgb(var(--lcars-amber))] text-black"
+              : "bg-black/50 text-[rgb(var(--lcars-amber))] border border-[rgb(var(--lcars-amber))]/40"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </nav>
   );
 }

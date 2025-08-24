@@ -5,6 +5,9 @@ function Badge({ ok, label }) {
   const cls = ok ? 'bg-[#18c56e] text-black' : 'bg-[#555] text-[#ddd]';
   return <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${cls}`}>{label}</span>;
 }
+function Pill({ children, className = '' }) {
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${className}`}>{children}</span>;
+}
 function Dot({ on }) { return <span className={`inline-block w-2.5 h-2.5 rounded-full ${on ? 'bg-[#f75b4f]' : 'bg-[#3a3a3a]'}`} />; }
 function Timeago({ ts }) {
   if (!ts) return <span>—</span>;
@@ -15,16 +18,15 @@ function Timeago({ ts }) {
 }
 
 export default function CrewPresenceView() {
-  // ✅ pull the list + counts from the hook
   const {
-    list,               // array of crew presence rows
+    list,
     onDutyCount,
     busyCount,
     busyPctOfOnDuty,
+    treatmentCount,          // ← NEW
     total,
   } = usePresence();
 
-  // derive ticker text from the on-duty crew list
   const onDutyList = useMemo(() => list.filter(c => c.onDuty === true), [list]);
   const ticker = useMemo(
     () => (onDutyList.length ? onDutyList.map(c => c.name || `#${c.crewId}`).join('   •   ') : '—'),
@@ -34,7 +36,7 @@ export default function CrewPresenceView() {
   return (
     <div className="space-y-4">
       {/* Summary header */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">{/* ← was 3, now 4 to include Treatment */}
         <Card title="On Duty">
           <span className="text-3xl font-bold">{onDutyCount}</span>
           <span className="opacity-70 ml-1">/ {total}</span>
@@ -42,6 +44,9 @@ export default function CrewPresenceView() {
         <Card title="Busy Now">
           <span className="text-3xl font-bold">{busyCount}</span>
           <span className="opacity-70 ml-1">({busyPctOfOnDuty}% )</span>
+        </Card>
+        <Card title="In Treatment">{/* ← NEW */}
+          <span className="text-3xl font-bold">{treatmentCount}</span>
         </Card>
         <Card title="Ticker">
           <div className="overflow-x-hidden whitespace-nowrap">
@@ -57,7 +62,7 @@ export default function CrewPresenceView() {
             <tr className="[&>th]:py-2 [&>th]:px-2">
               <th>Crew</th>
               <th>On Duty</th>
-              <th>Busy</th>
+              <th>Activity</th>{/* ← was 'Busy' */}
               <th>Deck Zone</th>
               <th>Updated</th>
             </tr>
@@ -66,12 +71,31 @@ export default function CrewPresenceView() {
             {list.map(row => (
               <tr key={row.crewId} className="border-t border-[#f2a007]/20 [&>td]:py-2 [&>td]:px-2">
                 <td className="font-medium">{row.name || `#${row.crewId}`}</td>
-                <td><Badge ok={!!row.onDuty} label={row.onDuty ? 'ON' : 'OFF'} /></td>
-                <td className="flex items-center gap-2">
-                  <Dot on={!!row.busy} />
-                  <span className="opacity-80">{row.busy ? 'Busy' : 'Idle'}</span>
+
+                <td>
+                  <Badge ok={!!row.onDuty} label={row.onDuty ? 'ON' : 'OFF'} />
                 </td>
-                <td>{row.deck_zone || '—'}</td>
+
+                {/* Activity column: show IN TREATMENT for patients, Busy/Idle for workers */}
+                <td className="flex items-center gap-2">
+                  {row.inTreatment ? (
+                    <Pill className="bg-[#f75b4f] text-black">IN TREATMENT</Pill>
+                  ) : (
+                    <>
+                      <Dot on={!!row.busy} />
+                      <span className="opacity-80">{row.busy ? 'Busy' : 'Idle'}</span>
+                    </>
+                  )}
+                </td>
+
+                <td>
+                  {row.deck_zone === 'Sickbay' && row.inTreatment ? (
+                    <Pill className="bg-[#3a3a3a] text-[#e8e2d0]">Sickbay</Pill>
+                  ) : (
+                    row.deck_zone || '—'
+                  )}
+                </td>
+
                 <td><Timeago ts={row.ts} /></td>
               </tr>
             ))}
