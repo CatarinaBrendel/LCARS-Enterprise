@@ -1,6 +1,7 @@
 import useCrewOverview from "../../hooks/useCrewOverview";
 import Sparkline from "../ui/Sparkline";
 import Pill from "../ui/Pill";
+import HistorySection from "./HistorySection";
 
 export default function CrewDrawer({ crewId, onClose }) {
   const { loading, error, identity, presence, vitalsNow, series, triage, orders } = useCrewOverview(crewId);
@@ -93,6 +94,9 @@ export default function CrewDrawer({ crewId, onClose }) {
           {error && <div className="text-red-400 text-sm">Error: {String(error.message || error)}</div>}
           {loading && <div className="text-zinc-400 text-sm">Loading…</div>}
         </div>
+
+        {/* History */}
+          <HistorySection crewId={crewId} />
       </aside>
     </div>
   );
