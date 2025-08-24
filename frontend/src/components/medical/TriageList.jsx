@@ -1,4 +1,4 @@
-import EcgMini from "../ui/EcgMini";
+import EcgMini from "../ui/ECGmini";
 import StatusPill from "../ui/StatusPill";
 
 const acuityToPill = (acuity) => {

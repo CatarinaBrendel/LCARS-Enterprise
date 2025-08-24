@@ -3,9 +3,11 @@ import LcarsSubnav from "./LcarsSubnav";
 import CrewPresenceView from "./CrewPresenceView";
 import StatusTable from "./medical/StatusTable";
 import TriageOverview from "./medical/TriageOverview";
+import CrewDrawer from './crew/CrewDrawer';
 
 export default function MedicalTab() {
   const [subTab, setSubTab] = useState("status");
+  const [drawerId, setDrawerId] = useState(null);
 
   const items = [
     { id: "status",   label: "STATUS" },
@@ -20,9 +22,11 @@ export default function MedicalTab() {
         <LcarsSubnav value={subTab} onChange={setSubTab} items={items} />
       </div>
 
-      {subTab === "status"   && <StatusTable />}
-      {subTab === "presence" && <CrewPresenceView />}
+      {subTab === "status"   && <StatusTable onSelectCrew={(id) => setDrawerId(id)} />}
+      {subTab === "presence" && <CrewPresenceView onSelectCrew={(id) => setDrawerId(id)} />}
       {subTab === "triage"   && <TriageOverview />}
+
+      {drawerId && <CrewDrawer crewId={drawerId} onClose={() => setDrawerId(null)}/>}
     </div>
   );
 }

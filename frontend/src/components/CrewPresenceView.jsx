@@ -17,7 +17,7 @@ function Timeago({ ts }) {
   return <span title={d.toLocaleString()}>{s} ago</span>;
 }
 
-export default function CrewPresenceView() {
+export default function CrewPresenceView({onSelectCrew}) {
   const {
     list,
     onDutyCount,
@@ -69,7 +69,11 @@ export default function CrewPresenceView() {
           </thead>
           <tbody className="text-[#e8e2d0]">
             {list.map(row => (
-              <tr key={row.crewId} className="border-t border-[#f2a007]/20 [&>td]:py-2 [&>td]:px-2">
+              <tr
+                key={row.crewId}
+                className="bg-black/40 border-tborder-[#f2a007]/20 [&>td]:py-2 [&>td]:px-2 cursor-pointer hover:bg-zinc-900/60"
+                onClick={() => onSelectCrew?.(row.crewId)}
+              >
                 <td className="font-medium">{row.name || `#${row.crewId}`}</td>
 
                 <td>

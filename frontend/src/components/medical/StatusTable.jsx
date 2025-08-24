@@ -35,7 +35,7 @@ function MetricCell({ metric, r, unit }) {
   );
 }
 
-export default function StatusTable() {
+export default function StatusTable({onSelectCrew}) {
   const { rows, loading } = useCrewStatsLive();
 
   return (
@@ -60,7 +60,11 @@ export default function StatusTable() {
             ) : rows.length === 0 ? (
               <tr><td colSpan="4" className="p-6 text-center opacity-70">No data.</td></tr>
             ) : rows.map((r) => (
-              <tr key={r.crewId} className="bg-black/40 border-t border-black/70">
+              <tr
+                key={r.crewId}
+                className="bg-black/40 border-t border-black/70 cursor-pointer hover:bg-zinc-900/60"
+                onClick={() => onSelectCrew?.(r.crewId)}
+              >
                 <td className="p-2 font-semibold text-[rgb(var(--lcars-amber))]">
                   {r.name ?? `#${r.crewId}`}
                 </td>
