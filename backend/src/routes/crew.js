@@ -118,7 +118,7 @@ router.get('/crew/presence', async (req, res, next) => {
             SELECT 1 FROM triage_visit tv
             WHERE tv.crew_id = c.id
               AND tv.ended_at IS NULL
-              AND tv.state IN ('admitted','under_treatment')
+              AND tv.state IN ('admitted','under_treatment','triage','recovering')
           ) AS "inTreatment"
         FROM crew c
         WHERE c.active = TRUE

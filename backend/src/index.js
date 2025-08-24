@@ -58,9 +58,29 @@ if (process.env.ENABLE_PRESENCE_SUMMARY !== 'false') {
 
 if (process.env.ENABLE_TRIAGE_SIM === 'true') {
   const stop = startTriageSimulator({
-    intervalMs: Number(process.env.TRIAGE_SIM_INTERVAL_MS) || 10_000,
-    admitChance: Number(process.env.TRIAGE_SIM_ADMIT_CHANCE) || 0.2,
-    maxConcurrent: Number(process.env.TRIAGE_SIM_MAX) || 3,
+    // your existing knobs
+    intervalMs: Number(process.env.TRIAGE_SIM_INTERVAL_MS) || 5_000,
+    admitChance: Number(process.env.TRIAGE_SIM_ADMIT_CHANCE) || 0.25,
+    maxConcurrent: Number(process.env.TRIAGE_SIM_MAX) || 4,
+
+    // NEW knobs for the condition ladder + timing
+    TICKS_PER_HOUR: Number(process.env.TRIAGE_SIM_TPH) || 12,       // 1 sim hour ≈ 1 minute at 5s ticks
+    observationHoursAtGood: Number(process.env.TRIAGE_SIM_OBS_H) || 1,
+    stepHours: {
+      critical: Number(process.env.TRIAGE_SIM_STEP_CRIT) || 6,
+      serious:  Number(process.env.TRIAGE_SIM_STEP_SER ) || 6,
+      stable:   Number(process.env.TRIAGE_SIM_STEP_STAB) || 2,
+      fair:     Number(process.env.TRIAGE_SIM_STEP_FAIR) || 1,
+    },
+    minTotalHoursByInitial: {
+      critical: Number(process.env.TRIAGE_SIM_MIN_CRIT) || 24,
+      serious:  Number(process.env.TRIAGE_SIM_MIN_SER ) || 24,
+      stable:   Number(process.env.TRIAGE_SIM_MIN_STAB) || 6,
+      fair:     Number(process.env.TRIAGE_SIM_MIN_FAIR) || 2,
+      good:     Number(process.env.TRIAGE_SIM_MIN_GOOD) || 0,
+    },
+
+    logger: console,
   });
   app.set('triageSimStop', stop);
 }
