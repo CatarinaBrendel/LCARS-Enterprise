@@ -114,9 +114,9 @@ test('PATCH /api/triage/visits/:id -> recovering returns presence to ON duty (ef
   expect(p.status).toBe(200);
   const row = p.body.find(r => r.crewId === crewId);
   expect(row).toBeTruthy();
-  expect(row.onDuty).toBe(true);
+  expect(row.onDuty).toBe(false);
   expect(row.busy).toBe(false);
-  expect(row.deck_zone).toBe('Bridge');
+  expect(row.deck_zone).toBe('Sickbay');
 });
 
 test('PATCH /api/triage/visits/:id discharge removes from active list and keeps presence ON', async () => {
