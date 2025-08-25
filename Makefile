@@ -40,6 +40,37 @@ psql: ## open psql (db must be running)
 reset-db: ## remove pgdata volume (DANGEROUS)
 	-$(DOCKER) volume rm $$(basename $$PWD)_pgdata || true
 
+## -- Database Migrations -- ##
+COMPOSE_PROJECT_NAME ?= lcars-enterprise
+
+# --- Dev ---
+
+dev-up:
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev up -d db
+
+dev-migrate: ## run migrations in dev
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev build migrate-dev
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev run --rm migrate-dev
+
+dev-reset: ## blow away dev DB and rerun migrations
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev down -v
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev up -d db
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev build migrate-dev
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev run --rm migrate-dev
+
+# --- Test ---
+
+test-up:
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile test up -d db migrate-test
+
+test-run: ## run api-tests container against test DB
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile test run --rm --no-deps api-tests
+
+test-reset: ## drop + recreate test DB with migrations
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile test down -v
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile test up -d db migrate-test
+
+
 ## -- Backend Test within Container -- ##
 cli-test:
 	COMPOSE_PROJECT_NAME=lcars-enterprise docker compose --profile test up -d db migrate-test
