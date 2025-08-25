@@ -5,12 +5,13 @@ import { ensureSchema } from '../database/init.js';
 import cron from 'node-cron';
 import { runRetentionOnce } from './retention.js';
 import { initWebSocket } from './websocket.js';
-import { startSimulator } from './simulator.js';
-import {startPresenceSimulator} from './presenceSimulator.js';
-import {startTriagePresenceListener} from './routes/listeners/triagePresence.js'
-import {startTriageSimulator } from './triageSimulator.js';
-import { startPresenceSummaryTicker } from './tickers/presenceSimulatorTicker.js';
- 
+import { startSimulator } from './routes/simulators/simulator.js';
+import {startPresenceSimulator} from  './routes/simulators/presenceSimulator.js';
+import {startTriagePresenceListener} from './routes/listeners/triagePresence.js';
+import {startTriageSimulator } from './routes/simulators/triageSimulator.js';
+import { startPresenceSummaryTicker } from './routes/simulators/tickers/presenceSimulatorTicker.js';
+import { startMissionSimulator } from './routes/simulators/missionSimulator.js';
+
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const HOST = process.env.HOST || '0.0.0.0'; 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:8080';
@@ -31,7 +32,7 @@ const withTimeout = (p, ms, label) =>
   ]);
 
 // Websockets
-const { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceUpdate } = initWebSocket(server, {
+const { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceUpdate, stopMissionRealtime } = initWebSocket(server, {
   corsOrigin: CORS_ORIGIN,
 });
 
@@ -45,8 +46,9 @@ if (process.env.ENABLE_SIM === "true") {
     .catch((err) => console.error("[sim] presence failed to start", err));
 }
 
-app.set("ws", { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceSummary });
+app.set("ws", { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceSummary, stopMissionRealtime });
 
+// --- Presence ---
 // start the periodic summary (toggle via env)
 if (process.env.ENABLE_PRESENCE_SUMMARY !== 'false') {
   const stop = startPresenceSummaryTicker({
@@ -56,6 +58,7 @@ if (process.env.ENABLE_PRESENCE_SUMMARY !== 'false') {
   app.set('presenceSummaryStop', stop);
 }
 
+// --- Triage ---
 if (process.env.ENABLE_TRIAGE_SIM === 'true') {
   const stop = startTriageSimulator({
     // your existing knobs
@@ -93,6 +96,19 @@ if (process.env.ENABLE_DB_LISTENERS !== 'false') {
     logger: console,
   });
 }
+
+// Start Mission simulator via env flag, skip in tests
+if (process.env.ENABLE_MISSION_SIM === 'true' && process.env.NODE_ENV !== 'test') {
+  const stop = await startMissionSimulator({ io });
+  app.set('missionSimStop', stop);
+}
+
+// Keep track of listeners/stoppers for clean shutdown
+app.set('listeners', {
+  ...(app.get('listeners') || {}),
+  triage: triageListener && { stop: triageListener.stop?.bind(triageListener) },
+  mission: { stop: stopMissionRealtime }
+});
 
 async function start() {
   const dbname = new URL(process.env.DATABASE_URL).pathname.replace(/^\//,'');
@@ -172,6 +188,14 @@ function shutdown(sig) {
 
 // keep your signals
 ['SIGINT', 'SIGTERM'].forEach(s => process.on(s, () => shutdown(s)));
+
+try { app.get('listeners')?.triage?.stop?.(); } catch (e) { console.error('[shutdown] triage stop:', e?.message); }
+try { app.get('listeners')?.mission?.stop?.(); } catch (e) { console.error('[shutdown] mission rt stop:', e?.message); }
+try { app.get('simStop')?.(); } catch (e) { console.error('[shutdown] sim stop:', e?.message); }
+try { app.get('ws')?.io?.close?.(); } catch (e) { console.error('[shutdown] ws close:', e?.message); }
+try { app.get('triageSimStop')?.(); } catch (e) { console.error('[shutdown] triage-sim stop:', e?.message); }
+try { app.get('missionSimStop')?.(); } catch (e) { console.error('[shutdown] mission-sim stop:', e?.message); }
+try { app.get('presenceSummaryStop')?.(); } catch (e) { console.error('[shutdown] presence-summary stop:', e?.message); }
 
 // Europe/Berlin daily at 03:15
 const CRON = process.env.RETENTION_CRON ?? '15 3 * * *';

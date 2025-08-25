@@ -24,6 +24,7 @@ services:
       - .:/usr/src/app
     environment:
       DATABASE_URL: postgres://app:app@db:5432/appdb
+      STARTUP_SEED: "true"
     depends_on:
       db:
         condition: service_healthy
@@ -43,7 +44,7 @@ services:
       HOST: 0.0.0.0
       CORS_ORIGIN: http://localhost:8080
       NODE_ENV: development
-      STARTUP_MIGRATE: background   # background | block | off
+      STARTUP_MIGRATE: block   # background | block | off
       STARTUP_SEED: "true"
       ENABLE_SIM: "true"
       ENABLE_TRIAGE_SIM: "true"
@@ -63,6 +64,12 @@ services:
       TRIAGE_SIM_MIN_GOOD: "0"
       ENABLE_PRESENCE_SUMMARY: "true"
       PRESENCE_SUMMARY_INTERVAL_MS: 10000
+      ENABLE_MISSION_SIM: true
+      MISSION_SIM_INTERVAL_MS: 5000
+      MISSION_SIM_ADVANCE_CHANCE: 0.6
+      MISSION_SIM_BLOCK_CHANCE: 0.12
+      MISSION_SIM_UNBLOCK_CHANCE: 0.18
+      MISSION_SIM_COMPLETE_ON_ALL_DONE: true
 
     volumes:
       - ./backend:/usr/src/app
@@ -73,10 +80,13 @@ services:
       migrate-dev:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: 
+        - CMD-SHELL
+        - node -e "require('http').get('http://localhost:3001/health',r=>{let d='';r.on('data',c=>d+=c);r.on('end',()=>process.exit(/\"ready\":\s*true/.test(d)?0:1));}).on('error',()=>process.exit(1));"
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
     ports:
       - "3001:3001"   # keep if you want to curl API directly from host
     restart: unless-stopped

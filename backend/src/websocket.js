@@ -1,4 +1,5 @@
 import { Server } from "socket.io";
+import {attachMissionRealtime } from './routes/internal/missionRealTime.js';
 
 /**
  * Event schema (recommendation)
@@ -25,11 +26,8 @@ export function initWebSocket(httpServer, {corsOrigin}) {
   io.on("connection", (socket) => {
     console.log("[ws] connected", socket.id);
     socket.emit("hello", { serverTime: Date.now() });
-
-    // Room strategy:
-    // - crew rooms: `crew:<id>`
-    // - metric rooms: `metric:<name>`
-    // - combo room (optional): `crew:<id>:metric:<name>`
+    
+    // --- Telemetry ---
     socket.on("telemetry:subscribe", ({ crewId, metrics } = {}) => {
       if (crewId) socket.join(`crew:${crewId}`);
       if (Array.isArray(metrics)) metrics.forEach(m => socket.join(`metric:${m}`));
@@ -40,12 +38,25 @@ export function initWebSocket(httpServer, {corsOrigin}) {
       if (Array.isArray(metrics)) metrics.forEach(m => socket.leave(`metric:${m}`));
     });
 
+    // ---- Mission subscriptions (NEW) ----
+    socket.on("mission:subscribe", ({ missionId } = {}) => {
+      socket.join("mission:all");
+      if (missionId) socket.join(`mission:${missionId}`);
+      socket.emit("mission:subscribed", { ok: true, missionId: missionId ?? null });
+    });
+
+    socket.on("mission:unsubscribe", ({ missionId } = {}) => {
+      socket.leave("mission:all");
+      if (missionId) socket.leave(`mission:${missionId}`);
+    });
+
     socket.on("disconnect", () => {
       console.log("[ws] disconnected", socket.id);
     });
   });
 
   // Helper broadcasters
+  // --- Telemetry ---
   function emitTelemetry({ crewId, metric, value, unit, ts = new Date() }) {
     const payload = { crewId, metric, value, unit, ts };
     // broadcast to general stream + crew room + metric room
@@ -54,12 +65,14 @@ export function initWebSocket(httpServer, {corsOrigin}) {
     if (metric) io.to(`metric:${metric}`).emit("telemetry:update", payload);
   }
 
+  // --- Crew ---
   function emitCrewEvent({ crewId, type, message, ts = new Date() }) {
     const payload = { crewId, type, message, ts };
     io.emit("event:crew", payload);
     if (crewId) io.to(`crew:${crewId}`).emit("event:crew", payload);
   }
 
+  // --- Presence ---
  function emitPresenceUpdate({ crewId, onDuty, busy, deck_zone, ts = new Date() }) {
     const payload = { crewId, onDuty, busy, deck_zone, ts };
     io.emit("presence:update", payload);               // everyone
@@ -72,5 +85,8 @@ export function initWebSocket(httpServer, {corsOrigin}) {
     io.emit("presence:summary", payload);
   }
 
-  return { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceUpdate };
+  // --- Mission ---
+  const stopMissionRealtime = attachMissionRealtime(io);
+
+  return { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceUpdate, stopMissionRealtime };
 }

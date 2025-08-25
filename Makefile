@@ -52,6 +52,9 @@ dev-migrate: ## run migrations in dev
 	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev build migrate-dev
 	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev run --rm migrate-dev
 
+dev-migrate-seed:
+	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev run -e STARTUP_SEED=true --rm migrate-dev
+
 dev-reset: ## blow away dev DB and rerun migrations
 	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev down -v
 	docker compose -p $(COMPOSE_PROJECT_NAME) --profile dev up -d db

@@ -1,11 +1,11 @@
 import '../loadEnv.js';
 import express from 'express';
 import cors from 'cors';
-import healthRouter from './routes/health.js';
-import crewRoutes from './routes/crew.js';
+import healthRouter from './routes/healthRoute.js';
+import crewRoutes from './routes/crewRoute.js';
 import telemetryIngest from './routes/internal/telemetry.js';
-import triageRouter from './routes/triage.js';
-import missionRouters from './routes/mission.js';
+import triageRouter from './routes/triageRoute.js';
+import missionRouters from './routes/missionRoute.js';
 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:8080';
 

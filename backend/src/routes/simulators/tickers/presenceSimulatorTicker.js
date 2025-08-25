@@ -1,4 +1,4 @@
-import { computeEffectiveSummary } from '../routes/presence/service.js';
+import { computeEffectiveSummary } from '../../presence/service.js';
 
 export function startPresenceSummaryTicker({
   emitPresenceSummary,

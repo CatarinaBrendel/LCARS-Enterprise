@@ -1,5 +1,5 @@
 // backend/src/simulator.js
-import { getClient } from "../database/db.js"; // your Pool/getClient helper
+import { getClient } from '../../../database/db.js';
 
 // What metrics to simulate
 const METRICS = [

@@ -10,10 +10,26 @@ export const socket = io(API_ORIGIN, {
   withCredentials: true,
 });
 
-// Simple helpers so components don’t need to remember event names
+export function getSocket() {
+  return socket;
+}
+
+// Telemetry subscriptions
 export function subscribeTelemetry({ crewId, metrics } = {}) {
   socket.emit("telemetry:subscribe", { crewId, metrics });
 }
 export function unsubscribeTelemetry({ crewId, metrics } = {}) {
   socket.emit("telemetry:unsubscribe", { crewId, metrics });
+}
+
+// Mission subscriptions
+export function subscribeMission({ missionId } = {}) {
+  socket.emit("mission:subscribe", { missionId });
+}
+export function unsubscribeMission({ missionId } = {}) {
+  socket.emit("mission:unsubscribe", { missionId });
+}
+export function onMissionChanged(handler) {
+  socket.on("mission:changed", handler);
+  return () => socket.off("mission:changed", handler);
 }

@@ -1,5 +1,5 @@
 // backend/src/simulators/triageSimulator.js
-import { query } from '../database/db.js';
+import { query } from '../../../database/db.js';
 
 /**
  * Condition ladder encoded via acuity:
