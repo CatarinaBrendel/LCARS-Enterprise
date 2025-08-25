@@ -1,12 +1,14 @@
-export default function LcarsHeaderBar({ left="DASHBOARD", right="UNITED FEDERATION OF PLANETS" }) {
+export default function LcarsHeaderBar({  title = "Dashboard", rightContent = "Uniter Federation of Planets" }) {
   return (
-    <div className="px-6 pt-6">
+    <div className="px-6 pt-6 mb-3">
       <div className="flex items-center gap-4">
         <div className="flex-1">
-          <div className="text-lcars-amber text-2xl font-bold tracking-wider uppercase">{left}</div>
+          <div className="text-lcars-amber text-2xl font-bold tracking-wider uppercase">{title}</div>
         </div>
         <div className="flex-1 text-right">
-          <div className="text-lcars-amber text-2xl font-bold tracking-wider uppercase">{right}</div>
+          <div className="text-lcars-amber text-2xl font-bold tracking-wider uppercase">
+            {rightContent}
+          </div>
         </div>
       </div>
       <div className="mt-3 flex items-center gap-3">

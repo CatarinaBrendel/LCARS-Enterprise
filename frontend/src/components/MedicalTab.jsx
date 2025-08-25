@@ -17,8 +17,7 @@ export default function MedicalTab() {
 
   return (
     <div className="space-y-4 py-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-widest text-[#f2a007]">Medical</h2>
+      <div className="flex items-end justify-end mr-2">
         <LcarsSubnav value={subTab} onChange={setSubTab} items={items} />
       </div>
 

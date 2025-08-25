@@ -3,13 +3,27 @@
 @layer base {
   :root {
     --lcars-amber: 242 169 0;
+    --lcars-amber-dark: 181 127 0;
+
     --lcars-gold: 255 184 74;
+    --lcars-gold-dark: 204 138 55;
+
     --lcars-copper: 184 106 31;
+    --lcars-copper-dark: 138 80 23;
+
     --lcars-brown: 122 63 16;
+    --lcars-brown-dark: 91 47 12;
+
     --lcars-red: 228 75 58;
+    --lcars-red-dark: 171 56 43;
+
     --lcars-blue: 106 167 200;
+    --lcars-blue-dark: 79 125 150;
+
     --lcars-slate: 110 120 138;
-    --lcars-text: 255 199 102;
+    --lcars-slate-dark: 83 90 103;
+
+     --lcars-text: 255 199 102;
   }
 }
 
@@ -26,6 +40,15 @@
   .bg-lcars-red  { background-color: rgb(var(--lcars-red)); }
   .bg-lcars-blue  { background-color: rgb(var(--lcars-blue)); }
   .bg-lcars-slate  { background-color: rgb(var(--lcars-slate)); }
+
+  .bg-lcars-amber-dark  { background-color: rgb(var(--lcars-amber-dark)); }
+  .bg-lcars-gold-dark   { background-color: rgb(var(--lcars-gold-dark)); }
+  .bg-lcars-copper-dark { background-color: rgb(var(--lcars-copper-dark)); }
+  .bg-lcars-brown-dark  { background-color: rgb(var(--lcars-brown-dark)); }
+  .bg-lcars-red-dark    { background-color: rgb(var(--lcars-red-dark)); }
+  .bg-lcars-blue-dark   { background-color: rgb(var(--lcars-blue-dark)); }
+  .bg-lcars-slate-dark  { background-color: rgb(var(--lcars-slate-dark)); }
+
   .lcars-text  { color: rgb(var(--lcars-text)); }
   .rounded-lcars {border-top-left-radius: 15px; border-top-right-radius: 15px; border-bottom-right-radius: 15px;}
 

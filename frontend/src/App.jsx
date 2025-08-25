@@ -1,19 +1,21 @@
 import './App.css'
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import LcarsSidebar from "./components/LcarsSidebar";
 import LcarsHeaderBar from "./components/LcarsHeaderBar";
 import MedicalTab from './components/MedicalTab';
 import DashboardGrid from './components/DashboardGrid';
+import { getTabTitle } from "./components/TabRegistry";
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
+  const headerTitle = useMemo(() => getTabTitle(tab), [tab]);
 
   return (
     <div className="min-h-screen bg-black text-[rgb(var(--lcars-text))]">
       <div className="flex">
         <LcarsSidebar current={tab} onSelect={setTab} />
-        <main className="flex-1 relative">
-            <LcarsHeaderBar />
+        <main className="flex-1 relative mx-4">
+            <LcarsHeaderBar title={headerTitle}/>
             {tab === "dashboard" && <DashboardGrid />}
             {tab === "command_operations" && (
               <div className="p-6 opacity-70">Command & Operations — coming soon</div>
