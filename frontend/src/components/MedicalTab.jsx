@@ -24,7 +24,7 @@ export default function MedicalTab() {
 
       {subTab === "status"   && <StatusTable onSelectCrew={(id) => setDrawerId(id)} />}
       {subTab === "presence" && <CrewPresenceView onSelectCrew={(id) => setDrawerId(id)} />}
-      {subTab === "triage"   && <TriageOverview />}
+      {subTab === "triage"   && <TriageOverview onSelectCrew={(id) => {setDrawerId(id)}} />}
 
       {drawerId && <CrewDrawer crewId={drawerId} onClose={() => setDrawerId(null)}/>}
     </div>
