@@ -5,6 +5,9 @@
     --lcars-amber: 242 169 0;
     --lcars-amber-dark: 181 127 0;
 
+    --lcars-purple: 143 86 116;
+    --lcars-purple-dark: 107 64 87;
+
     --lcars-gold: 255 184 74;
     --lcars-gold-dark: 204 138 55;
 
@@ -40,6 +43,7 @@
   .bg-lcars-red  { background-color: rgb(var(--lcars-red)); }
   .bg-lcars-blue  { background-color: rgb(var(--lcars-blue)); }
   .bg-lcars-slate  { background-color: rgb(var(--lcars-slate)); }
+  .bg-lcars-purple  { background-color: rgb(var(--lcars-purple)); }
 
   .bg-lcars-amber-dark  { background-color: rgb(var(--lcars-amber-dark)); }
   .bg-lcars-gold-dark   { background-color: rgb(var(--lcars-gold-dark)); }
@@ -48,6 +52,7 @@
   .bg-lcars-red-dark    { background-color: rgb(var(--lcars-red-dark)); }
   .bg-lcars-blue-dark   { background-color: rgb(var(--lcars-blue-dark)); }
   .bg-lcars-slate-dark  { background-color: rgb(var(--lcars-slate-dark)); }
+  .bg-lcars-purple-dark  { background-color: rgb(var(--lcars-purple-dark)); }
 
   .lcars-text  { color: rgb(var(--lcars-text)); }
   .rounded-lcars {border-top-left-radius: 15px; border-top-right-radius: 15px; border-bottom-right-radius: 15px;}
