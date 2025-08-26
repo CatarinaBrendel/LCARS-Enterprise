@@ -154,7 +154,6 @@ test('PATCH /api/missions/:id/objectives/:objId transitions state and logs objec
   expect(states[obj]).toBe('done');
 });
 
-
 test('POST /api/missions/:id/events appends free-form event', async () => {
   const r = await request(app)
     .post(`/api/missions/${missionId}/events`)

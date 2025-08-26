@@ -42,10 +42,11 @@ export async function forceReleaseAllClients() {
   }
 }
 
-// endPool should be last, after releasing
+// backend/database/db.js
+let __poolEnded = false;
+
 export async function endPool() {
-  await Promise.race([
-    pool.end(),
-    new Promise(res => setTimeout(res, 2000)),
-  ]);
+  if (__poolEnded) return;
+  __poolEnded = true;
+  await pool.end();
 }

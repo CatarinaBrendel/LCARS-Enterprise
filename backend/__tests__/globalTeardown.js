@@ -1,6 +1,7 @@
-import { teardown } from './_teardown.js';
+// backend/__tests__/global-teardown.js
+import { endPool, forceReleaseAllClients } from '../database/db.js';
 
-// Only DB cleanup is meaningful here (no server/io/clients in this process)
-export default async function () {
-  await teardown();
+export async function teardown() {
+  await forceReleaseAllClients();
+  try { await endPool(); } catch {}
 }

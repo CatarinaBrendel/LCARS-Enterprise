@@ -1,5 +1,5 @@
 import '../loadEnv.js';
-import { teardown } from './_teardown.js';
+import { teardownPerFile } from './_teardown_per_file.js';
 
 // prove the cron mock is used (optional)
 try { /* eslint-disable no-console */ console.log('[setup] node-cron ->', require.resolve('node-cron')); } catch {}
@@ -13,4 +13,4 @@ if (process.env.NODE_ENV === 'test') {
   };
 }
 
-afterAll(async () => { await teardown(); });
+afterAll(async () => { await teardownPerFile(); });

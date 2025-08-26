@@ -68,6 +68,152 @@ async function loadMissionSnapshot(missionId) {
   };
 }
 
+// Distinct sectors for filters (optionally with counts)
+router.get('/sectors', async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT sector, COUNT(*)::int AS count
+         FROM mission
+        WHERE sector IS NOT NULL AND sector <> ''
+        GROUP BY sector
+        ORDER BY sector ASC`
+    );
+    // shape for the client
+    res.json({
+      items: rows.map(r => ({ sector: r.sector, count: r.count }))
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* Mission List Endpoints */
+// GET /api/missions (list with paging/filter/sort) ---
+router.get('/', async (req, res, next) => {
+  try {
+    // query params
+    const page      = Math.max(1, parseInt(req.query.page ?? '1', 10));
+    const pageSize  = Math.min(100, Math.max(1, parseInt(req.query.pageSize ?? '25', 10)));
+    const q         = (req.query.q ?? '').trim();                 // search
+    const sector    = (req.query.sector ?? '').trim();
+    const statusArg = (req.query.status ?? '').trim();            // e.g. "IN PROGRESS,DONE" or "in_progress,completed"
+    const sortBy    = (req.query.sortBy ?? 'started_at').trim();
+    const sortDir   = (req.query.sortDir ?? 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    // map UI status labels to DB enum where needed
+    // UI uses: NOT STARTED, IN PROGRESS, HOLD, BLOCKED?, DONE
+    // DB uses: planned, in_progress, hold, completed, aborted
+    const uiToDb = {
+      'NOT STARTED': 'planned',
+      'IN PROGRESS': 'in_progress',
+      'HOLD': 'hold',
+      'DONE': 'completed',
+      'BLOCKED': 'hold',     // (no mission-level 'blocked'; map to hold, or drop if you prefer)
+      'ABORTED': 'aborted',
+    };
+
+    let statusList = [];
+    if (statusArg) {
+      statusList = statusArg
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map(s => uiToDb[s.toUpperCase()] ?? s.toLowerCase()); // allow either UI or DB values
+      // dedupe & keep only valid
+      const valid = new Set(['planned','in_progress','hold','completed','aborted']);
+      statusList = Array.from(new Set(statusList)).filter(s => valid.has(s));
+    }
+
+    // whitelist sorting
+    const sortColumns = new Map([
+      ['code', 'f.code'],
+      ['status', 'f.status'],
+      ['sector', 'f.sector'],
+      ['authority', 'f.authority'],
+      ['progress', 'COALESCE(p.progress_pct, 0)'],
+      ['started_at', 'f.started_at'],
+      ['updated_at', 'f.updated_at'],
+    ]);
+    const sortExpr = sortColumns.get(sortBy) ?? 'm.started_at';
+
+    // dynamic WHERE
+    const where = [];
+    const params = [];
+    let idx = 1;
+
+    if (q) {
+      where.push(`(
+        m.code ILIKE $${idx} OR
+        m.authority ILIKE $${idx} OR
+        EXISTS (
+          SELECT 1 FROM mission_objective o
+           WHERE o.mission_id = m.id AND o.title ILIKE $${idx}
+        )
+      )`);
+      params.push(`%${q}%`); idx++;
+    }
+
+    if (sector) {
+      where.push(`m.sector = $${idx}`); params.push(sector); idx++;
+    }
+
+    if (statusList.length > 0) {
+      where.push(`m.status = ANY($${idx})`); params.push(statusList); idx++;
+    }
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    // paging
+    const offset = (page - 1) * pageSize;
+
+    // query with total
+    const sql = `
+      WITH filtered AS (
+        SELECT m.id, m.code, m.status, m.sector, m.authority, m.started_at, m.updated_at,
+               COALESCE(p.progress_pct, 0)::int AS progress
+          FROM mission m
+          LEFT JOIN mission_progress p ON p.mission_id = m.id
+          ${whereSql}
+      )
+      SELECT f.*, COUNT(*) OVER() AS total
+        FROM filtered f
+        ORDER BY ${sortExpr} ${sortDir}, f.id DESC
+        LIMIT $${idx} OFFSET $${idx+1};
+    `;
+    params.push(pageSize, offset);
+
+    const { rows } = await query(sql, params);
+
+    const total = Number(rows[0]?.total ?? 0);
+    // map DB status to UI/status pill label
+    const dbToUi = {
+      planned: 'NOT STARTED',
+      in_progress: 'IN PROGRESS',
+      hold: 'HOLD',
+      completed: 'DONE',
+      aborted: 'ABORTED',
+    };
+
+    const items = rows.map(r => ({
+      id: r.id,
+      code: r.code,
+      // keep both: a) raw for logic, b) display for UI pills
+      status_raw: r.status,
+      status: dbToUi[r.status] ?? r.status,
+      sector: r.sector,
+      authority: r.authority,
+      progress: Number(r.progress ?? 0),
+      started_at: r.started_at,
+      updated_at: r.updated_at,
+    }));
+
+    res.json({ items, total, page, pageSize });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* Single Mission Endpoints */
 /* GET /api/missions/current
    Picks the "current" mission preferring in_progress, then hold, then planned (latest). */
 router.get('/current', async (req, res, next) => {
