@@ -1,4 +1,3 @@
-// src/components/CommandOps/MissionOverview.jsx
 import { useEffect, useState } from 'react';
 import { useMission } from '../../hooks/useMission';
 import Pill from '../ui/Pill';
@@ -26,29 +25,31 @@ function Progress({ percent = 0 }) {
   );
 }
 
-export default function MissionOverview({ setHeaderOverride }) {
-  const { mission, loading, error, updateStatus, updateObjective } = useMission();
+export default function MissionDetails({ missionId, setHeaderOverride }) {
+  const { mission, loading, error, updateStatus, updateObjective } = useMission(missionId);
   const [pending, setPending] = useState(false);
-
+  
   // Override header while mounted
   useEffect(() => {
     setHeaderOverride?.({ title: 'Mission Overview' });
     return () => setHeaderOverride?.(null);
   }, [setHeaderOverride]);
-
+  
   if (loading) return <div className="p-6 opacity-70">Loading mission…</div>;
   if (error) return <div className="p-6 text-red-400">Error: {String(error.message || error)}</div>;
   if (!mission) return <div className="p-6 opacity-70">No mission.</div>;
-
+  
   const { code, stardate, sector, authority, status, progress_pct, objectives = [], teams = [], events = [] } = mission;
-
+  
   async function handleStatus(next) {
     if (next === status) return;      // no-op
     setPending(true);
     try { await updateStatus(next); } // this triggers a refetch via your hook
     finally { setPending(false); }
   }
-
+  
+  if (!missionId) return <div className="p-6 opacity-70">No mission selected.</div>;
+  
   return (
     <div className="h-full overflow-y-auto p-6 pr-6 space-y-6">
       {/* Top facts + controls */}
