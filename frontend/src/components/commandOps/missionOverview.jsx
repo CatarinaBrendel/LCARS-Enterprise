@@ -34,6 +34,7 @@ export default function MissionOverview() {
     status, setStatus,
     sector, setSector,
     loading, error,
+    hasIncoming, showIncoming
   } = useMissions({ page: 1, pageSize: 25, sortBy: "started_at", sortDir: "desc" });
 
   const [sectors, setSectors] = useState([]);
@@ -121,6 +122,16 @@ export default function MissionOverview() {
   return (
     <div className="p-6">
       <h1 className="text-2xl mb-4">Missions</h1>
+      {hasIncoming && (
+      <div className="mb-3">
+        <button
+          className="rounded-lcars bg-lcars-gold text-black px-3 py-1"
+          onClick={showIncoming}
+        >
+          New missions available — Show
+        </button>
+      </div>
+    )}
 
       <MissionList
         missions={displayMissions}

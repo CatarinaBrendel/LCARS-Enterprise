@@ -70,6 +70,9 @@ services:
       MISSION_SIM_BLOCK_CHANCE: 0.12
       MISSION_SIM_UNBLOCK_CHANCE: 0.18
       MISSION_SIM_COMPLETE_ON_ALL_DONE: true
+      ENABLE_MISSION_GENERATOR: true
+      MISSION_GEN_MIN: 30s
+      MISSION_GEN_MAX: 1h
 
     volumes:
       - ./backend:/usr/src/app

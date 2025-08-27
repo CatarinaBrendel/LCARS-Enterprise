@@ -1,51 +1,65 @@
-import { getClient, query } from '../../../database/db.js';
+import { getClient, query } from "../../../database/db.js";
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-// ---- Singleton guard in-process (per Node runtime)
 if (!globalThis.__missionSim) globalThis.__missionSim = { running: false };
 
 export async function startMissionSimulator({
+  // prefer passing helpers from websocker.js; fall back to io if only io is provided
   io = null,
+  emitMissionStatus,
+  emitMissionProgress,
+  emitMissionObjective,
+  emitMissionEvent,
   intervalMs = Number(process.env.MISSION_SIM_INTERVAL_MS) || 5000,
   advanceChance = Number(process.env.MISSION_SIM_ADVANCE_CHANCE) || 0.6,
   blockChance = Number(process.env.MISSION_SIM_BLOCK_CHANCE) || 0.12,
   unblockChance = Number(process.env.MISSION_SIM_UNBLOCK_CHANCE) || 0.18,
-  completeOnAllDone = ['1','true','yes'].includes(String(process.env.MISSION_SIM_COMPLETE_ON_ALL_DONE || 'true').toLowerCase()),
+  completeOnAllDone = ["1", "true", "yes"].includes(
+    String(process.env.MISSION_SIM_COMPLETE_ON_ALL_DONE || "true").toLowerCase()
+  ),
 } = {}) {
-
-  const LOCK_KEY = 424242; // any 32-bit int you want
+  // --------- advisory lock so only one simulator runs -----------
+  const LOCK_KEY = 424242;
   const lockClient = await getClient();
   try {
-    const { rows } = await lockClient.query('SELECT pg_try_advisory_lock($1) AS ok', [LOCK_KEY]);
+    const { rows } = await lockClient.query("SELECT pg_try_advisory_lock($1) AS ok", [LOCK_KEY]);
     if (!rows[0]?.ok) {
-      console.warn('[missionSim] another instance holds the advisory lock; not starting here');
+      console.warn("[missionSim] another instance holds the advisory lock; not starting here");
       try { lockClient.release(); } catch {}
       return async () => {};
     }
   } catch (e) {
-    console.warn('[missionSim] failed to acquire advisory lock:', e?.message);
+    console.warn("[missionSim] failed to acquire advisory lock:", e?.message);
     try { lockClient.release(); } catch {}
     return async () => {};
   }
 
   if (globalThis.__missionSim.running) {
-    console.warn('[missionSim] already running, skipping second start');
-    return async () => {}; // no-op stopper
+    console.warn("[missionSim] already running, skipping second start");
+    return async () => {};
   }
-
   globalThis.__missionSim.running = true;
 
-  let timer = null;
-
- function emitToMissionRooms(event, payload, missionId) {
-    if (!io) return;
-    io.emit(event, payload); // global listeners
-    io.to("mission:all").emit(event, payload);
-    if (missionId) io.to(`mission:${missionId}`).emit(event, payload);
+  // --------- build shims if only io was provided ----------
+  if (!emitMissionStatus || !emitMissionProgress || !emitMissionObjective || !emitMissionEvent) {
+    const send = (room, ev, payload) => {
+      if (!io) return;
+      io.emit(ev, payload);
+      io.to("mission:all").emit(ev, payload);
+      if (room) io.to(room).emit(ev, payload);
+    };
+    emitMissionStatus    = (id, status)                 => send(`mission:${id}`, "mission:status",   { missionId: id, status });
+    emitMissionProgress  = (id, progress_pct)           => send(`mission:${id}`, "mission:progress", { missionId: id, progress_pct: Number(progress_pct) || 0 });
+    emitMissionObjective = (id, objective_id, to, from) => io?.to?.(`mission:${id}`)?.emit("mission:objective", { missionId: id, objective_id, to, ...(from ? { from } : {}) });
+    emitMissionEvent     = (id, kind, payload = {})     => {
+      const ev = { missionId: id, kind, payload };
+      io?.emit?.("mission:event", ev);
+      io?.to?.(`mission:${id}`)?.emit("mission:event", ev);
+    };
   }
 
-   async function recalcMissionProgress(missionId) {
-    // uses only mission_objective; clamped to [0..100]
+  // --------- utils ----------
+  async function recalcMissionProgress(missionId) {
     await query(
       `
       WITH t AS (
@@ -74,8 +88,8 @@ export async function startMissionSimulator({
       `SELECT id, status FROM mission
         ORDER BY
           (status = 'in_progress') DESC,
-          (status = 'hold') DESC,
-          (status = 'planned') DESC,
+          (status = 'hold')        DESC,
+          (status = 'planned')     DESC,
           COALESCE(started_at, updated_at) DESC,
           id DESC
         LIMIT 1`
@@ -87,12 +101,14 @@ export async function startMissionSimulator({
     const mission = await getCurrentMission();
     if (!mission) return;
 
-    // If nothing in progress, try to resume planned → in_progress
-    if (mission.status !== 'in_progress') {
-      // resume if we have any planned mission
+    // Start a planned/hold mission
+    if (mission.status !== "in_progress") {
       await query(
-        `UPDATE mission SET status = 'in_progress', started_at = COALESCE(started_at, NOW()), updated_at = NOW()
-          WHERE id = $1 AND status <> 'in_progress'`,
+        `UPDATE mission
+           SET status = 'in_progress',
+               started_at = COALESCE(started_at, NOW()),
+               updated_at = NOW()
+         WHERE id = $1 AND status <> 'in_progress'`,
         [mission.id]
       );
       await query(
@@ -102,14 +118,13 @@ export async function startMissionSimulator({
       );
 
       await recalcMissionProgress(mission.id);
-      emitToMissionRooms("mission:status", { missionId: mission.id, status: "in_progress" }, mission.id);
+      emitMissionStatus(mission.id, "in_progress");
       const { rows: p } = await query(`SELECT progress_pct FROM mission WHERE id = $1`, [mission.id]);
-      emitToMissionRooms("mission:progress", { missionId: mission.id, progress_pct: Number(p[0]?.progress_pct ?? 0) }, mission.id);
-
+      emitMissionProgress(mission.id, Number(p[0]?.progress_pct ?? 0));
       return;
     }
 
-    // Load objectives
+    // Work objectives
     const { rows: objs } = await query(
       `SELECT id, state, priority
          FROM mission_objective
@@ -119,15 +134,17 @@ export async function startMissionSimulator({
     );
     if (objs.length === 0) return;
 
-    // Decide an action
-    const candidates = objs.filter(o => o.state !== 'done');
+    const candidates = objs.filter((o) => o.state !== "done");
     if (candidates.length === 0) {
       if (completeOnAllDone) {
-        await query('BEGIN');
+        await query("BEGIN");
         try {
           await query(
-            `UPDATE mission SET status = 'completed', ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
-             WHERE id = $1 AND status <> 'completed'`,
+            `UPDATE mission
+                SET status = 'completed',
+                    ended_at = COALESCE(ended_at, NOW()),
+                    updated_at = NOW()
+              WHERE id = $1 AND status <> 'completed'`,
             [mission.id]
           );
           await query(
@@ -135,77 +152,71 @@ export async function startMissionSimulator({
              VALUES ($1, 'completed', '{"sim":"auto"}'::jsonb)`,
             [mission.id]
           );
-
-          emitToMissionRooms("mission:event", { missionId: mission.id, kind: "note", payload: { msg: "sim tick" } }, mission.id);
+          emitMissionEvent(mission.id, "note", { msg: "sim tick" });
 
           await query(`UPDATE mission SET progress_pct = 100, updated_at = NOW() WHERE id = $1`, [mission.id]);
+          await query("COMMIT");
 
-          await query('COMMIT');
- 
-          emitToMissionRooms("mission:status", { missionId: mission.id, status: "completed" }, mission.id);
-          emitToMissionRooms("mission:progress", { missionId: mission.id, progress_pct: 100 }, mission.id);
-          emitToMissionRooms("mission:event", { missionId: mission.id, kind: "completed", payload: { sim: "auto" } }, mission.id);
-        } catch (e) { await query('ROLLBACK'); }
+          emitMissionStatus(mission.id, "completed");
+          emitMissionProgress(mission.id, 100);
+          emitMissionEvent(mission.id, "completed", { sim: "auto" });
+        } catch (e) {
+          await query("ROLLBACK");
+          console.error("[missionSim] completion error", e);
+        }
       }
       return;
     }
 
     const target = pick(candidates);
 
-    // Maybe unblock if blocked
-    if (target.state === 'blocked' && Math.random() < unblockChance) {
-      await transitionObjective(mission.id, target.id, 'in_progress', { reason: 'unblock' });
+    // Maybe unblock
+    if (target.state === "blocked" && Math.random() < unblockChance) {
+      await transitionObjective(mission.id, target.id, "in_progress", { reason: "unblock" });
       return;
     }
 
     // Maybe block
-    if (target.state !== 'blocked' && Math.random() < blockChance) {
-      await transitionObjective(mission.id, target.id, 'blocked', { reason: 'obstacle' });
+    if (target.state !== "blocked" && Math.random() < blockChance) {
+      await transitionObjective(mission.id, target.id, "blocked", { reason: "obstacle" });
       return;
     }
 
-    // Advance flow
+    // Advance
     if (Math.random() < advanceChance) {
       const next = nextState(target.state);
-      if (next) {
-        await transitionObjective(mission.id, target.id, next, { reason: 'advance' });
-      }
-    } else {
-      // Otherwise, emit a heartbeat note sometimes
-      if (Math.random() < 0.2) {
-        await query(
-          `INSERT INTO mission_event (mission_id, kind, payload)
-           VALUES ($1, 'note', '{"msg":"sim tick"}'::jsonb)`,
-          [mission.id]
-        );
-      }
+      if (next) await transitionObjective(mission.id, target.id, next, { reason: "advance" });
+    } else if (Math.random() < 0.2) {
+      await query(
+        `INSERT INTO mission_event (mission_id, kind, payload)
+         VALUES ($1, 'note', '{"msg":"sim tick"}'::jsonb)`,
+        [mission.id]
+      );
+      emitMissionEvent(mission.id, "note", { msg: "sim tick" });
     }
   }
 
   function nextState(state) {
-    if (state === 'not_started') return 'in_progress';
-    if (state === 'in_progress') return 'done';
+    if (state === "not_started") return "in_progress";
+    if (state === "in_progress") return "done";
     return null; // blocked stays until unblocked
   }
 
   async function transitionObjective(missionId, objId, toState, extraPayload) {
-    await query('BEGIN');
+    await query("BEGIN");
     try {
       const cur = await query(
         `SELECT state FROM mission_objective WHERE id = $1 AND mission_id = $2 FOR UPDATE`,
         [objId, missionId]
       );
       const prev = cur.rows[0]?.state;
-      if (!prev || prev === toState) { await query('ROLLBACK'); return; }
+      if (!prev || prev === toState) { await query("ROLLBACK"); return; }
 
       await query(
         `UPDATE mission_objective SET state = $1, updated_at = NOW() WHERE id = $2`,
         [toState, objId]
       );
-      await query(
-        `UPDATE mission SET updated_at = NOW() WHERE id = $1`,
-        [missionId]
-      );
+      await query(`UPDATE mission SET updated_at = NOW() WHERE id = $1`, [missionId]);
       await query(
         `INSERT INTO mission_event (mission_id, kind, payload)
          VALUES ($1, 'objective_state', $2::jsonb)`,
@@ -213,30 +224,26 @@ export async function startMissionSimulator({
       );
 
       await recalcMissionProgress(missionId);
+      await query("COMMIT");
 
-      await query('COMMIT');
-
-      emitToMissionRooms(
-        "mission:objective",
-        { missionId, objective_id: Number(objId), from: prev, to: toState },
-        missionId
-      );
+      emitMissionObjective(missionId, Number(objId), toState, prev);
       const { rows: p } = await query(`SELECT progress_pct FROM mission WHERE id = $1`, [missionId]);
-      emitToMissionRooms("mission:progress", { missionId, progress_pct: Number(p[0]?.progress_pct ?? 0) }, missionId);
-
+      emitMissionProgress(missionId, Number(p[0]?.progress_pct ?? 0));
     } catch (e) {
-      await query('ROLLBACK');
-      console.error('[missionSim] transition error', e);
+      await query("ROLLBACK");
+      console.error("[missionSim] transition error", e);
     }
   }
 
+  // kick + loop
   await tick();
-  timer = setInterval(tick, intervalMs);
+  const timer = setInterval(tick, intervalMs);
   console.log(`[missionSim] running every ${intervalMs}ms`);
-  return async () => { 
-    clearInterval(timer); 
+
+  return async () => {
+    clearInterval(timer);
     globalThis.__missionSim.running = false;
-    try { await lockClient.query('SELECT pg_advisory_unlock($1)', [LOCK_KEY]); } catch {}
+    try { await lockClient.query("SELECT pg_advisory_unlock($1)", [LOCK_KEY]); } catch {}
     try { lockClient.release(); } catch {}
   };
 }

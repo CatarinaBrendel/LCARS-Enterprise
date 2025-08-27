@@ -11,6 +11,7 @@ import {startTriagePresenceListener} from './routes/listeners/triagePresence.js'
 import {startTriageSimulator } from './routes/simulators/triageSimulator.js';
 import { startPresenceSummaryTicker } from './routes/simulators/tickers/presenceSimulatorTicker.js';
 import { startMissionSimulator } from './routes/simulators/missionSimulator.js';
+import { startMissionGenerator } from './routes/simulators/missionGenerator.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const HOST = process.env.HOST || '0.0.0.0'; 
@@ -32,21 +33,45 @@ const withTimeout = (p, ms, label) =>
   ]);
 
 // Websockets
-const { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceUpdate, stopMissionRealtime } = initWebSocket(server, {
+const { 
+  io, 
+  emitTelemetry, 
+  emitCrewEvent, 
+  emitPresenceSummary, 
+  emitPresenceUpdate, 
+  stopMissionRealtime, 
+  emitMissionStatus,
+  emitMissionProgress,
+  emitMissionObjective,
+  emitMissionEvent,
+  emitMissionCreated,
+} = initWebSocket(server, {
   corsOrigin: CORS_ORIGIN,
 });
 
-if (process.env.ENABLE_SIM === "true") {
+app.set("ws", { 
+  io, 
+  emitTelemetry, 
+  emitCrewEvent, 
+  emitPresenceSummary, 
+  stopMissionRealtime,
+  emitMissionStatus,
+  emitMissionProgress,
+  emitMissionObjective,
+  emitMissionEvent,
+  emitMissionCreated, 
+});
+
+// ---- Simulators toggles ----
+if (process.env.ENABLE_SIM === 'true') {
   startSimulator({ emitTelemetry, intervalMs: 1000 })
-    .then((stop) => app.set("simStop", stop))
-    .catch((err) => console.error("[sim] failed to start", err));
+    .then((stop) => app.set('simStop', stop))
+    .catch((err) => console.error('[sim] failed to start', err));
 
   startPresenceSimulator({ emitPresenceUpdate, emitPresenceSummary })
-    .then((stop) => app.set("simStopPresence", stop))
-    .catch((err) => console.error("[sim] presence failed to start", err));
+    .then((stop) => app.set('simStopPresence', stop))
+    .catch((err) => console.error('[sim] presence failed to start', err));
 }
-
-app.set("ws", { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceSummary, stopMissionRealtime });
 
 // --- Presence ---
 // start the periodic summary (toggle via env)
@@ -88,6 +113,14 @@ if (process.env.ENABLE_TRIAGE_SIM === 'true') {
   app.set('triageSimStop', stop);
 }
 
+// -- Mission Generator --
+if(process.env.ENABLE_MISSION_GENERATOR === 'true') {
+  const {emitMissionCreated} = app.get('ws') || {};
+  const stop = startMissionGenerator({emitMissionCreated});
+  app.set('missionGenStop', stop);
+};
+
+// DB Listeners
 let triageListener;
 if (process.env.ENABLE_DB_LISTENERS !== 'false') {
   triageListener = startTriagePresenceListener({
@@ -97,9 +130,15 @@ if (process.env.ENABLE_DB_LISTENERS !== 'false') {
   });
 }
 
-// Start Mission simulator via env flag, skip in tests
+// Mission simulator (start ONCE; pass helpers)
 if (process.env.ENABLE_MISSION_SIM === 'true' && process.env.NODE_ENV !== 'test') {
-  const stop = await startMissionSimulator({ io });
+  const stop = await startMissionSimulator({
+    emitMissionStatus,
+    emitMissionProgress,
+    emitMissionObjective,
+    emitMissionEvent,
+    intervalMs: Number(process.env.MISSION_SIM_INTERVAL_MS) || 3000,
+  });
   app.set('missionSimStop', stop);
 }
 
@@ -110,6 +149,7 @@ app.set('listeners', {
   mission: { stop: stopMissionRealtime }
 });
 
+// --- Start HTTP --- 
 async function start() {
   const dbname = new URL(process.env.DATABASE_URL).pathname.replace(/^\//,'');
   if (process.env.NODE_ENV === 'production' && /_test$/i.test(dbname)) {
@@ -157,18 +197,21 @@ start().catch((e) => {
   process.exit(1);
 });
 
-// optional: graceful shutdown
+// --- Graceful shutdown ---
 function shutdown(sig) {
   console.log(`\n${sig} received, shutting down...`);
 
-  // 1) stop background loops/listeners first
+  // stop background loops/listeners first
   try { app.get('listeners')?.triage?.stop?.(); } catch (e) { console.error('[shutdown] triage stop:', e?.message); }
+  try { app.get('listeners')?.mission?.stop?.(); } catch (e) { console.error('[shutdown] mission rt stop:', e?.message); }
   try { app.get('simStop')?.(); } catch (e) { console.error('[shutdown] sim stop:', e?.message); }
   try { app.get('ws')?.io?.close?.(); } catch (e) { console.error('[shutdown] ws close:', e?.message); }
   try { app.get('triageSimStop')?.(); } catch (e) { console.error('[shutdown] triage-sim stop:', e?.message); }
+  try { app.get('missionSimStop')?.(); } catch (e) { console.error('[shutdown] mission-sim stop:', e?.message); }
   try { app.get('presenceSummaryStop')?.(); } catch (e) { console.error('[shutdown] presence-summary stop:', e?.message); }
+  try { app.get('missionGenStop')?.(); } catch (e) { console.error('[shutdown] mission-gen stop:', e?.message); }
 
-  // 2) close HTTP server (stops accepting new conns)
+  // close HTTP server (stops accepting new conns)
   server.close(async () => {
     console.log('HTTP server closed.');
 
@@ -189,18 +232,10 @@ function shutdown(sig) {
 // keep your signals
 ['SIGINT', 'SIGTERM'].forEach(s => process.on(s, () => shutdown(s)));
 
-try { app.get('listeners')?.triage?.stop?.(); } catch (e) { console.error('[shutdown] triage stop:', e?.message); }
-try { app.get('listeners')?.mission?.stop?.(); } catch (e) { console.error('[shutdown] mission rt stop:', e?.message); }
-try { app.get('simStop')?.(); } catch (e) { console.error('[shutdown] sim stop:', e?.message); }
-try { app.get('ws')?.io?.close?.(); } catch (e) { console.error('[shutdown] ws close:', e?.message); }
-try { app.get('triageSimStop')?.(); } catch (e) { console.error('[shutdown] triage-sim stop:', e?.message); }
-try { app.get('missionSimStop')?.(); } catch (e) { console.error('[shutdown] mission-sim stop:', e?.message); }
-try { app.get('presenceSummaryStop')?.(); } catch (e) { console.error('[shutdown] presence-summary stop:', e?.message); }
-
 // Europe/Berlin daily at 03:15
 const CRON = process.env.RETENTION_CRON ?? '15 3 * * *';
 
-// Cron job to clean up the metrics perioodically 
+// --- Retention cron job (Europe/Berlin daily at 03:15) --- 
 if (process.env.START_RETENTION !== 'false') {
   cron.schedule(CRON, () => {
     runRetentionOnce(console).catch(err => console.error('[retention] error', err));

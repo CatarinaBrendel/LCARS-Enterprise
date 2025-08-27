@@ -85,8 +85,51 @@ export function initWebSocket(httpServer, {corsOrigin}) {
     io.emit("presence:summary", payload);
   }
 
-  // --- Mission ---
+  // --- Mission (helpers you can call from routes/sim/seeders) ---
   const stopMissionRealtime = attachMissionRealtime(io);
+  function emitMissionStatus(missionId, status) {
+    const payload = { missionId, status };
+    io.emit("mission:status", payload);
+    io.to("mission:all").emit("mission:status", payload);
+    if (missionId) io.to(`mission:${missionId}`).emit("mission:status", payload);
+  }
 
-  return { io, emitTelemetry, emitCrewEvent, emitPresenceSummary, emitPresenceUpdate, stopMissionRealtime };
+  function emitMissionProgress(missionId, progress_pct) {
+    const payload = { missionId, progress_pct: Number(progress_pct) || 0 };
+    io.emit("mission:progress", payload);
+    io.to("mission:all").emit("mission:progress", payload);
+    if (missionId) io.to(`mission:${missionId}`).emit("mission:progress", payload);
+  }
+
+  function emitMissionObjective(missionId, objective_id, to, from) {
+    const payload = { missionId, objective_id, to, ...(from ? { from } : {}) };
+    if (missionId) io.to(`mission:${missionId}`).emit("mission:objective", payload);
+  }
+
+  function emitMissionEvent(missionId, kind, payload = {}) {
+    const ev = { missionId, kind, payload };
+    io.emit("mission:event", ev);
+    if (missionId) io.to(`mission:${missionId}`).emit("mission:event", ev);
+  }
+
+  // Call this right after inserting a new mission in the DB
+  function emitMissionCreated(missionId) {
+    emitMissionStatus(missionId, "planned");
+    emitMissionProgress(missionId, 0);
+    emitMissionEvent(missionId, "created", { sim: true });
+  }
+
+  return { 
+    io, 
+    emitTelemetry, 
+    emitCrewEvent, 
+    emitPresenceSummary, 
+    emitPresenceUpdate, 
+    emitMissionStatus,
+    emitMissionProgress,
+    emitMissionObjective,
+    emitMissionEvent,
+    emitMissionCreated,
+    stopMissionRealtime 
+  };
 }

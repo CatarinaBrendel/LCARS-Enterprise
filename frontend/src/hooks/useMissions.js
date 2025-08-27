@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listMissions } from "../lib/missions";
-import { getSocket } from "../lib/ws";
+import { subscribeMission, unsubscribeMission, onMissionEvent } from "../lib/ws";
 
 function useDebounced(fn, delay = 250) {
   const t = useRef(null);
@@ -23,6 +23,8 @@ export function useMissions(initial = {}) {
   const [search, setSearch] = useState(initial.search ?? "");
   const [status, setStatus] = useState(initial.status ?? []);
   const [sector, setSector] = useState(initial.sector ?? "");
+
+  const [hasIncoming, setHasIncoming] = useState(false);
 
   const fetcher = useCallback(async () => {
     setLoading(true);
@@ -48,15 +50,30 @@ export function useMissions(initial = {}) {
 
   // realtime subscription (like useMission)
   useEffect(() => {
-    const s = getSocket();
-    s.emit("missions:subscribe", {});
-    const onChanged = () => refetch();
-    s.on("missions:changed", onChanged);
+    // Join mission:all room
+    subscribeMission({});
+
+    // When a mission is created, refresh the list (or jump to page 1)
+    const off = onMissionEvent(({ kind }) => {
+      if (kind !== "created") return;
+      // If you're on page 1, just refetch; otherwise jump to page 1 so it's visible
+      if (page === 1) refetch();
+      else setPage(1);
+    });
+    
+
     return () => {
-      s.off("missions:changed", onChanged);
-      s.emit("missions:unsubscribe", {});
+      off();
+      unsubscribeMission({});
     };
-  }, [refetch]);
+  }, [page, refetch, setPage]);
+
+  // action for the banner/button
+  const showIncoming = useCallback(() => {
+    setHasIncoming(false);
+    if (page !== 1) setPage(1);
+    else refetch();
+  }, [page, refetch, setPage]);
 
   return useMemo(
     () => ({
@@ -70,11 +87,13 @@ export function useMissions(initial = {}) {
       status, setStatus,
       sector, setSector,
       refetch,
+      hasIncoming, showIncoming
     }),
     [
       missions, total, loading, err,
       page, pageSize, sortBy, sortDir,
-      search, status, sector, refetch
+      search, status, sector, refetch,
+      hasIncoming, showIncoming
     ]
   );
 }

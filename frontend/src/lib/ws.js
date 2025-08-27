@@ -14,6 +14,10 @@ export function getSocket() {
   return socket;
 }
 
+// remeber mission rooms to rejoin on reconnect
+let subscribeAll = false;
+const missionRooms = new Set();
+
 // Telemetry subscriptions
 export function subscribeTelemetry({ crewId, metrics } = {}) {
   socket.emit("telemetry:subscribe", { crewId, metrics });
@@ -25,10 +29,21 @@ export function unsubscribeTelemetry({ crewId, metrics } = {}) {
 // Mission subscriptions
 export function subscribeMission({ missionId } = {}) {
   socket.emit("mission:subscribe", { missionId });
+  if(missionId) missionRooms.add(missionId);
+  else subscribeAll = true;
 }
+
 export function unsubscribeMission({ missionId } = {}) {
   socket.emit("mission:unsubscribe", { missionId });
+  if(missionId) missionRooms.add(missionId);
+  else subscribeAll = false;
 }
+
+// rejoin after reconnect
+socket.on("connect", () => {
+  if(subscribeAll) socket.emit("mission:subscribe", {});
+  for(const id of missionRooms) socket.emit("mission:subscribe", {missionId: id});
+});
 
 // Fine-grained mission listeners
 export function onMissionProgress(handler) {
