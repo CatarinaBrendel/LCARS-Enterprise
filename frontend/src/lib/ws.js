@@ -29,7 +29,30 @@ export function subscribeMission({ missionId } = {}) {
 export function unsubscribeMission({ missionId } = {}) {
   socket.emit("mission:unsubscribe", { missionId });
 }
+
+// Fine-grained mission listeners
+export function onMissionProgress(handler) {
+  socket.on("mission:progress", handler);
+  return () => socket.off("mission:progress", handler);
+}
+export function onMissionStatus(handler) {
+  socket.on("mission:status", handler);
+  return () => socket.off("mission:status", handler);
+}
+export function onMissionObjective(handler) {
+  socket.on("mission:objective", handler);
+  return () => socket.off("mission:objective", handler);
+}
+export function onMissionEvent(handler) {
+  socket.on("mission:event", handler);
+  return () => socket.off("mission:event", handler);
+}
+
+// Back-compat aggregator: normalize multiple events into one stream
 export function onMissionChanged(handler) {
-  socket.on("mission:changed", handler);
-  return () => socket.off("mission:changed", handler);
+  const off1 = onMissionProgress((p) => handler({ type: "progress", ...p }));
+  const off2 = onMissionStatus((p) => handler({ type: "status", ...p }));
+  const off3 = onMissionObjective((p) => handler({ type: "objective", ...p }));
+  const off4 = onMissionEvent((p) => handler({ type: "event", ...p }));
+  return () => { off1(); off2(); off3(); off4(); };
 }

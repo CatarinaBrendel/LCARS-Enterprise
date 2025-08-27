@@ -1,6 +1,8 @@
-import { query } from '../../../database/db.js';
+import { getClient, query } from '../../../database/db.js';
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+// ---- Singleton guard in-process (per Node runtime)
+if (!globalThis.__missionSim) globalThis.__missionSim = { running: false };
 
 export async function startMissionSimulator({
   io = null,
@@ -11,7 +13,61 @@ export async function startMissionSimulator({
   completeOnAllDone = ['1','true','yes'].includes(String(process.env.MISSION_SIM_COMPLETE_ON_ALL_DONE || 'true').toLowerCase()),
 } = {}) {
 
+  const LOCK_KEY = 424242; // any 32-bit int you want
+  const lockClient = await getClient();
+  try {
+    const { rows } = await lockClient.query('SELECT pg_try_advisory_lock($1) AS ok', [LOCK_KEY]);
+    if (!rows[0]?.ok) {
+      console.warn('[missionSim] another instance holds the advisory lock; not starting here');
+      try { lockClient.release(); } catch {}
+      return async () => {};
+    }
+  } catch (e) {
+    console.warn('[missionSim] failed to acquire advisory lock:', e?.message);
+    try { lockClient.release(); } catch {}
+    return async () => {};
+  }
+
+  if (globalThis.__missionSim.running) {
+    console.warn('[missionSim] already running, skipping second start');
+    return async () => {}; // no-op stopper
+  }
+
+  globalThis.__missionSim.running = true;
+
   let timer = null;
+
+ function emitToMissionRooms(event, payload, missionId) {
+    if (!io) return;
+    io.emit(event, payload); // global listeners
+    io.to("mission:all").emit(event, payload);
+    if (missionId) io.to(`mission:${missionId}`).emit(event, payload);
+  }
+
+   async function recalcMissionProgress(missionId) {
+    // uses only mission_objective; clamped to [0..100]
+    await query(
+      `
+      WITH t AS (
+        SELECT
+          COUNT(*)::numeric AS total,
+          SUM(CASE state
+                WHEN 'done' THEN 1.0
+                WHEN 'in_progress' THEN 0.5
+                ELSE 0.0
+              END)::numeric AS score
+        FROM mission_objective
+        WHERE mission_id = $1
+      )
+      UPDATE mission m
+      SET progress_pct = COALESCE(ROUND(100 * t.score / NULLIF(t.total, 0)), 0),
+          updated_at = NOW()
+      FROM t
+      WHERE m.id = $1
+      `,
+      [missionId]
+    );
+  }
 
   async function getCurrentMission() {
     const { rows } = await query(
@@ -44,6 +100,12 @@ export async function startMissionSimulator({
          VALUES ($1, 'resume', '{"sim":true}'::jsonb)`,
         [mission.id]
       );
+
+      await recalcMissionProgress(mission.id);
+      emitToMissionRooms("mission:status", { missionId: mission.id, status: "in_progress" }, mission.id);
+      const { rows: p } = await query(`SELECT progress_pct FROM mission WHERE id = $1`, [mission.id]);
+      emitToMissionRooms("mission:progress", { missionId: mission.id, progress_pct: Number(p[0]?.progress_pct ?? 0) }, mission.id);
+
       return;
     }
 
@@ -73,7 +135,16 @@ export async function startMissionSimulator({
              VALUES ($1, 'completed', '{"sim":"auto"}'::jsonb)`,
             [mission.id]
           );
+
+          emitToMissionRooms("mission:event", { missionId: mission.id, kind: "note", payload: { msg: "sim tick" } }, mission.id);
+
+          await query(`UPDATE mission SET progress_pct = 100, updated_at = NOW() WHERE id = $1`, [mission.id]);
+
           await query('COMMIT');
+ 
+          emitToMissionRooms("mission:status", { missionId: mission.id, status: "completed" }, mission.id);
+          emitToMissionRooms("mission:progress", { missionId: mission.id, progress_pct: 100 }, mission.id);
+          emitToMissionRooms("mission:event", { missionId: mission.id, kind: "completed", payload: { sim: "auto" } }, mission.id);
         } catch (e) { await query('ROLLBACK'); }
       }
       return;
@@ -141,14 +212,31 @@ export async function startMissionSimulator({
         [missionId, JSON.stringify({ objective_id: Number(objId), from: prev, to: toState, ...extraPayload })]
       );
 
+      await recalcMissionProgress(missionId);
+
       await query('COMMIT');
+
+      emitToMissionRooms(
+        "mission:objective",
+        { missionId, objective_id: Number(objId), from: prev, to: toState },
+        missionId
+      );
+      const { rows: p } = await query(`SELECT progress_pct FROM mission WHERE id = $1`, [missionId]);
+      emitToMissionRooms("mission:progress", { missionId, progress_pct: Number(p[0]?.progress_pct ?? 0) }, missionId);
+
     } catch (e) {
       await query('ROLLBACK');
       console.error('[missionSim] transition error', e);
     }
   }
 
+  await tick();
   timer = setInterval(tick, intervalMs);
   console.log(`[missionSim] running every ${intervalMs}ms`);
-  return async () => { clearInterval(timer); };
+  return async () => { 
+    clearInterval(timer); 
+    globalThis.__missionSim.running = false;
+    try { await lockClient.query('SELECT pg_advisory_unlock($1)', [LOCK_KEY]); } catch {}
+    try { lockClient.release(); } catch {}
+  };
 }

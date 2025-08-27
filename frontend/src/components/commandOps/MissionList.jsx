@@ -120,7 +120,6 @@ export default function MissionList({
 
           <tbody>
             {loading && <SkeletonRows rows={6} />}
-
             {!loading && error && (
               <tr>
                 <td colSpan={5} className="px-4 py-6 text-red-400">
@@ -154,10 +153,15 @@ export default function MissionList({
                 <td className="px-4 py-2 truncate">{m.authority}</td>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 bg-zinc-700 rounded">
-                      <div className="h-2 rounded bg-lcars-gold" style={{ width: `${coercePct(m.progress)}%` }} />
-                    </div>
-                    <span className="text-xs">{coercePct(m.progress)}%</span>
+                    {(() => {
+                     const pct = coercePct(m.progress ?? m.progress_pct);
+                     return (
+                       <>
+                         <div className="h-2 rounded bg-lcars-gold" style={{ width: `${pct}%` }} />
+                         <span className="text-xs">{pct}%</span>
+                       </>
+                     );
+                   })()}
                   </div>
                 </td>
               </tr>

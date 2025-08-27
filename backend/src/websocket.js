@@ -38,7 +38,7 @@ export function initWebSocket(httpServer, {corsOrigin}) {
       if (Array.isArray(metrics)) metrics.forEach(m => socket.leave(`metric:${m}`));
     });
 
-    // ---- Mission subscriptions (NEW) ----
+    // ---- Mission subscriptions ----
     socket.on("mission:subscribe", ({ missionId } = {}) => {
       socket.join("mission:all");
       if (missionId) socket.join(`mission:${missionId}`);

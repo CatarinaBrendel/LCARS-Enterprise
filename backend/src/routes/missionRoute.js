@@ -7,10 +7,26 @@ const router = express.Router();
 /* Helpers */
 async function loadMissionSnapshot(missionId) {
   const m = await query(
-    `SELECT m.*, p.progress_pct
-       FROM mission m
-       LEFT JOIN mission_progress p ON p.mission_id = m.id
-      WHERE m.id = $1`,
+    `
+    WITH agg AS (
+      SELECT mission_id,
+             ROUND(
+               100 * SUM(CASE state
+                           WHEN 'done' THEN 1.0
+                           WHEN 'in_progress' THEN 0.5
+                           ELSE 0.0
+                         END) / NULLIF(COUNT(*), 0)
+             )::int AS pct
+      FROM mission_objective
+      WHERE mission_id = $1
+      GROUP BY mission_id
+    )
+    SELECT m.*,
+           COALESCE(agg.pct, 0)::int AS progress_pct
+    FROM mission m
+    LEFT JOIN agg ON agg.mission_id = m.id
+    WHERE m.id = $1
+    `,
     [missionId]
   );
   const mission = m.rows[0] ?? null;
@@ -68,6 +84,13 @@ async function loadMissionSnapshot(missionId) {
   };
 }
 
+function emitMission(io, event, payload, missionId) {
+  if (!io) return;
+  io.emit(event, payload);
+  io.to('mission:all').emit(event, payload);
+  if (missionId) io.to(`mission:${missionId}`).emit(event, payload);
+}
+
 // Distinct sectors for filters (optionally with counts)
 router.get('/sectors', async (req, res, next) => {
   try {
@@ -78,37 +101,31 @@ router.get('/sectors', async (req, res, next) => {
         GROUP BY sector
         ORDER BY sector ASC`
     );
-    // shape for the client
-    res.json({
-      items: rows.map(r => ({ sector: r.sector, count: r.count }))
-    });
+    res.json({ items: rows.map(r => ({ sector: r.sector, count: r.count })) });
   } catch (err) {
     next(err);
   }
 });
 
 /* Mission List Endpoints */
-// GET /api/missions (list with paging/filter/sort) ---
+// GET /api/missions (list with paging/filter/sort)
 router.get('/', async (req, res, next) => {
   try {
-    // query params
     const page      = Math.max(1, parseInt(req.query.page ?? '1', 10));
     const pageSize  = Math.min(100, Math.max(1, parseInt(req.query.pageSize ?? '25', 10)));
-    const q         = (req.query.q ?? '').trim();                 // search
+    const q         = (req.query.q ?? '').trim();
     const sector    = (req.query.sector ?? '').trim();
-    const statusArg = (req.query.status ?? '').trim();            // e.g. "IN PROGRESS,DONE" or "in_progress,completed"
+    const statusArg = (req.query.status ?? '').trim();
     const sortBy    = (req.query.sortBy ?? 'started_at').trim();
     const sortDir   = (req.query.sortDir ?? 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
 
-    // map UI status labels to DB enum where needed
-    // UI uses: NOT STARTED, IN PROGRESS, HOLD, BLOCKED?, DONE
-    // DB uses: planned, in_progress, hold, completed, aborted
+    // UI ↔ DB status mapping
     const uiToDb = {
       'NOT STARTED': 'planned',
       'IN PROGRESS': 'in_progress',
       'HOLD': 'hold',
       'DONE': 'completed',
-      'BLOCKED': 'hold',     // (no mission-level 'blocked'; map to hold, or drop if you prefer)
+      'BLOCKED': 'hold',
       'ABORTED': 'aborted',
     };
 
@@ -118,23 +135,22 @@ router.get('/', async (req, res, next) => {
         .split(',')
         .map(s => s.trim())
         .filter(Boolean)
-        .map(s => uiToDb[s.toUpperCase()] ?? s.toLowerCase()); // allow either UI or DB values
-      // dedupe & keep only valid
+        .map(s => uiToDb[s.toUpperCase()] ?? s.toLowerCase());
       const valid = new Set(['planned','in_progress','hold','completed','aborted']);
       statusList = Array.from(new Set(statusList)).filter(s => valid.has(s));
     }
 
-    // whitelist sorting
+    // whitelist sorting (use f.* from filtered CTE)
     const sortColumns = new Map([
       ['code', 'f.code'],
       ['status', 'f.status'],
       ['sector', 'f.sector'],
       ['authority', 'f.authority'],
-      ['progress', 'COALESCE(p.progress_pct, 0)'],
+      ['progress', 'f.progress'],
       ['started_at', 'f.started_at'],
       ['updated_at', 'f.updated_at'],
     ]);
-    const sortExpr = sortColumns.get(sortBy) ?? 'm.started_at';
+    const sortExpr = sortColumns.get(sortBy) ?? 'f.started_at';
 
     // dynamic WHERE
     const where = [];
@@ -162,30 +178,38 @@ router.get('/', async (req, res, next) => {
     }
 
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-
-    // paging
     const offset = (page - 1) * pageSize;
 
-    // query with total
     const sql = `
-      WITH filtered AS (
+      WITH agg AS (
+        SELECT mission_id,
+               ROUND(
+                 100 * SUM(CASE state
+                             WHEN 'done' THEN 1.0
+                             WHEN 'in_progress' THEN 0.5
+                             ELSE 0.0
+                           END) / NULLIF(COUNT(*), 0)
+               )::int AS pct
+        FROM mission_objective
+        GROUP BY mission_id
+      ),
+      filtered AS (
         SELECT m.id, m.code, m.status, m.sector, m.authority, m.started_at, m.updated_at,
-               COALESCE(p.progress_pct, 0)::int AS progress
+               COALESCE(agg.pct, 0)::int AS progress
           FROM mission m
-          LEFT JOIN mission_progress p ON p.mission_id = m.id
+          LEFT JOIN agg ON agg.mission_id = m.id
           ${whereSql}
       )
       SELECT f.*, COUNT(*) OVER() AS total
         FROM filtered f
         ORDER BY ${sortExpr} ${sortDir}, f.id DESC
-        LIMIT $${idx} OFFSET $${idx+1};
+        LIMIT $${idx} OFFSET $${idx + 1};
     `;
     params.push(pageSize, offset);
 
     const { rows } = await query(sql, params);
-
     const total = Number(rows[0]?.total ?? 0);
-    // map DB status to UI/status pill label
+
     const dbToUi = {
       planned: 'NOT STARTED',
       in_progress: 'IN PROGRESS',
@@ -197,7 +221,6 @@ router.get('/', async (req, res, next) => {
     const items = rows.map(r => ({
       id: r.id,
       code: r.code,
-      // keep both: a) raw for logic, b) display for UI pills
       status_raw: r.status,
       status: dbToUi[r.status] ?? r.status,
       sector: r.sector,
@@ -214,8 +237,8 @@ router.get('/', async (req, res, next) => {
 });
 
 /* Single Mission Endpoints */
-/* GET /api/missions/current
-   Picks the "current" mission preferring in_progress, then hold, then planned (latest). */
+
+// GET /api/missions/current
 router.get('/current', async (req, res, next) => {
   try {
     const { rows } = await query(
@@ -235,7 +258,7 @@ router.get('/current', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* GET /api/missions/:id */
+// GET /api/missions/:id
 router.get('/:id', async (req, res, next) => {
   try {
     const snap = await loadMissionSnapshot(Number(req.params.id));
@@ -244,14 +267,15 @@ router.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* PATCH /api/missions/:id  { status? }
-   Writes status changes and logs mission_event accordingly. */
+/* PATCH /api/missions/:id  { status? } */
 router.patch('/:id', async (req, res, next) => {
   const id = Number(req.params.id);
-  const { status } = req.body ?? {};
-  if (!['planned','in_progress','hold','completed','aborted'].includes(status)) {
-    return res.status(400).json({ error: 'bad_status' });
-  }
+  const { status: rawStatus } = req.body ?? {};
+
+  // accept UI synonym "not_started" and map to DB "planned"
+  const status = rawStatus === 'not_started' ? 'planned' : rawStatus;
+  const ALLOWED = ['planned','in_progress','hold','completed','aborted'];
+  if (!ALLOWED.includes(status)) return res.status(400).json({ error: 'bad_status' });
 
   const statusToEvent = {
     planned: 'note',
@@ -264,21 +288,80 @@ router.patch('/:id', async (req, res, next) => {
   try {
     await query('BEGIN');
 
-    const cur = await query('SELECT status FROM mission WHERE id = $1 FOR UPDATE', [id]);
+    const cur = await query(
+      `
+      WITH agg AS (
+        SELECT mission_id,
+               ROUND(100 * SUM(CASE state WHEN 'done' THEN 1.0
+                                          WHEN 'in_progress' THEN 0.5
+                                          ELSE 0.0 END)
+                     / NULLIF(COUNT(*), 0))::int AS pct
+        FROM mission_objective
+        WHERE mission_id = $1
+        GROUP BY mission_id
+      )
+      SELECT m.status,
+             COALESCE(agg.pct, 0)::int AS progress_pct
+      FROM mission m
+      LEFT JOIN agg ON agg.mission_id = m.id
+      WHERE m.id = $1
+      FOR UPDATE
+      `,
+      [id]
+    );
+
     if (!cur.rows[0]) {
       await query('ROLLBACK');
       return res.status(404).json({ error: 'not_found' });
     }
+
     const prev = cur.rows[0].status;
     if (prev === status) {
       await query('COMMIT');
-      return res.json({ ok: true, id, status });
+      const { io } = req.app.get('ws') || {};
+      const payloadStatus = { missionId: id, status };
+      const payloadProg   = { missionId: id, progress_pct: Number(cur.rows[0].progress_pct ?? 0) };
+      io?.emit('mission:status', payloadStatus);
+      io?.emit('mission:progress', payloadProg);
+      io?.to('mission:all')?.emit('mission:status', payloadStatus);
+      io?.to('mission:all')?.emit('mission:progress', payloadProg);
+      io?.to(`mission:${id}`)?.emit('mission:status', payloadStatus);
+      io?.to(`mission:${id}`)?.emit('mission:progress', payloadProg);
+      return res.json({ ok: true, id, status, progress_pct: payloadProg.progress_pct });
     }
 
     const fields = ['status = $2', 'updated_at = NOW()'];
     const vals = [id, status];
-    if (status === 'in_progress' && prev !== 'in_progress') fields.push('started_at = COALESCE(started_at, NOW())');
-    if ((status === 'completed' || status === 'aborted') && prev !== status) fields.push('ended_at = COALESCE(ended_at, NOW())');
+
+    // Reset when going back to "planned" (aka UI "not_started")
+    if (status === 'planned') {
+      await query(
+        `UPDATE mission_objective
+            SET state = 'not_started', updated_at = NOW()
+          WHERE mission_id = $1`,
+        [id]
+      );
+    }
+    // Optional: when marking completed, force objectives to done so progress = 100
+    if (status === 'completed') {
+      await query(
+        `UPDATE mission_objective
+            SET state = 'done', updated_at = NOW()
+          WHERE mission_id = $1 AND state <> 'done'`,
+        [id]
+      );
+    }
+
+    await query(
+      `INSERT INTO mission_event (mission_id, kind, payload)
+       VALUES ($1, 'status_changed', $2::jsonb)`,
+      [id, JSON.stringify({ from: prev, to: status, via: 'api' })]
+    );
+
+    if (status === 'in_progress' && prev !== 'in_progress')
+      fields.push('started_at = COALESCE(started_at, NOW())');
+    if ((status === 'completed' || status === 'aborted') && prev !== status)
+      fields.push('ended_at = COALESCE(ended_at, NOW())');
 
     await query(`UPDATE mission SET ${fields.join(', ')} WHERE id = $1`, vals);
 
@@ -288,16 +371,50 @@ router.patch('/:id', async (req, res, next) => {
       [id, statusToEvent[status], JSON.stringify({ from: prev, to: status })]
     );
 
+    const { rows: after } = await query(
+      `
+      WITH agg AS (
+        SELECT mission_id,
+               ROUND(100 * SUM(CASE state WHEN 'done' THEN 1.0
+                                          WHEN 'in_progress' THEN 0.5
+                                          ELSE 0.0 END)
+                     / NULLIF(COUNT(*), 0))::int AS pct
+        FROM mission_objective
+        WHERE mission_id = $1
+        GROUP BY mission_id
+      )
+      SELECT m.status,
+             COALESCE(agg.pct, 0)::int AS progress_pct
+      FROM mission m
+      LEFT JOIN agg ON agg.mission_id = m.id
+      WHERE m.id = $1
+      `,
+      [id]
+    );
+
     await query('COMMIT');
-    res.json({ ok: true, id, status });
+
+    const { io } = req.app.get('ws') || {};
+    if (io) {
+      const payloadStatus = { missionId: id, status: after[0]?.status ?? status };
+      const payloadProg   = { missionId: id, progress_pct: Number(after[0]?.progress_pct ?? 0) };
+      io.emit('mission:status', payloadStatus);
+      io.emit('mission:progress', payloadProg);
+      io.to('mission:all').emit('mission:status', payloadStatus);
+      io.to('mission:all').emit('mission:progress', payloadProg);
+      io.to(`mission:${id}`).emit('mission:status', payloadStatus);
+      io.to(`mission:${id}`).emit('mission:progress', payloadProg);
+      io.to(`mission:${id}`).emit('mission:event', { missionId: id, kind: 'status_changed', payload: { from: prev, to: status, via: 'api' } });
+    }
+
+    res.json({ ok: true, id, status: after[0]?.status ?? status, progress_pct: after[0]?.progress_pct ?? 0 });
   } catch (err) {
     await query('ROLLBACK');
     next(err);
   }
 });
 
-/* PATCH /api/missions/:id/objectives/:objId  { state }
-   Idempotent: no duplicate event if state doesn’t change. */
+/* PATCH /api/missions/:id/objectives/:objId  { state } */
 router.patch('/:id/objectives/:objId', async (req, res, next) => {
   const missionId = Number(req.params.id);
   const objId = Number(req.params.objId);
@@ -344,7 +461,40 @@ router.patch('/:id/objectives/:objId', async (req, res, next) => {
       [missionId, JSON.stringify({ objective_id: objId, from: prev, to: state })]
     );
 
+    // compute new progress to emit
+    const { rows: after } = await query(
+      `
+      WITH agg AS (
+        SELECT mission_id,
+               ROUND(100 * SUM(CASE state WHEN 'done' THEN 1.0
+                                          WHEN 'in_progress' THEN 0.5
+                                          ELSE 0.0 END)
+                     / NULLIF(COUNT(*), 0))::int AS pct
+        FROM mission_objective
+        WHERE mission_id = $1
+        GROUP BY mission_id
+      )
+      SELECT COALESCE(agg.pct, 0)::int AS progress_pct
+      FROM mission m
+      LEFT JOIN agg ON agg.mission_id = m.id
+      WHERE m.id = $1
+      `,
+      [missionId]
+    );
+
     await query('COMMIT');
+
+    // emit objective + progress so list updates
+    const { io } = req.app.get('ws') || {};
+    if (io) {
+      io.emit('mission:objective', { missionId, objective_id: objId, from: prev, to: state });
+      io.to('mission:all').emit('mission:objective', { missionId, objective_id: objId, from: prev, to: state });
+      io.to(`mission:${missionId}`).emit('mission:objective', { missionId, objective_id: objId, from: prev, to: state });
+      io.emit('mission:progress', { missionId, progress_pct: Number(after[0]?.progress_pct ?? 0) });
+      io.to('mission:all').emit('mission:progress', { missionId, progress_pct: Number(after[0]?.progress_pct ?? 0) });
+      io.to(`mission:${missionId}`).emit('mission:progress', { missionId, progress_pct: Number(after[0]?.progress_pct ?? 0) });
+    }
+
     res.json({ ok: true, id: objId, state });
   } catch (err) {
     await query('ROLLBACK');
