@@ -1,11 +1,43 @@
 // src/sim/generate.js
 import { query } from '../../../database/db.js';
 
-const SECTORS = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Tau'];
-const AUTHORITIES = ['Starfleet Command', 'Science Council', 'Colony Admin', 'Diplomatic Corps'];
+const SECTORS = [
+  'Alpha', 'Beta', 'Gamma', 'Delta', 'Tau',
+  'Epsilon', 'Theta', 'Zeta', 'Omega', 'Neutral Zone'
+];
+
+const AUTHORITIES = [
+  'Starfleet Command',
+  'Federation Science Council',
+  'Federation Diplomatic Corps',
+  'Colony Administration',
+  'Starfleet Medical',
+  'Starfleet Corps of Engineers',
+  'Federation Security Bureau',
+  'Exploration Council'
+];
+
 const OBJ_TITLES = [
-  'Scan anomaly', 'Deliver supplies', 'Rescue survivors',
-  'Negotiate truce', 'Repair subspace relay', 'Map nebula corridor'
+  'Scan spatial anomaly',
+  'Deliver humanitarian supplies',
+  'Rescue stranded crew',
+  'Negotiate ceasefire',
+  'Repair subspace relay',
+  'Map nebula corridor',
+  'Escort diplomatic envoy',
+  'Investigate distress signal',
+  'Patrol disputed border',
+  'Investigate derelict vessel',
+  'Transport dignitary',
+  'Contain planetary epidemic',
+  'Survey uncharted system',
+  'Secure dilithium shipment',
+  'Investigate temporal disturbance',
+  'Protect civilian convoy',
+  'First contact protocol',
+  'Decontaminate research outpost',
+  'Stabilize collapsing starbase',
+  'Defuse minefield in Neutral Zone'
 ];
 
 const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
