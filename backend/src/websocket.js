@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
 import {attachMissionRealtime } from './routes/internal/missionRealTime.js';
+import { fetchNewMission } from "./routes/presence/service.js";
 
 /**
  * Event schema (recommendation)
@@ -42,6 +43,7 @@ export function initWebSocket(httpServer, {corsOrigin}) {
     socket.on("mission:subscribe", ({ missionId } = {}) => {
       socket.join("mission:all");
       if (missionId) socket.join(`mission:${missionId}`);
+      console.log("[ws] mission:subscribe", socket.id, { missionId, rooms: [...socket.rooms] });
       socket.emit("mission:subscribed", { ok: true, missionId: missionId ?? null });
     });
 
@@ -113,10 +115,21 @@ export function initWebSocket(httpServer, {corsOrigin}) {
   }
 
   // Call this right after inserting a new mission in the DB
-  function emitMissionCreated(missionId) {
-    emitMissionStatus(missionId, "planned");
-    emitMissionProgress(missionId, 0);
-    emitMissionEvent(missionId, "created", { sim: true });
+  async function emitMissionCreated(missionId) {
+    try {
+      const mission = await fetchNewMission(missionId);
+      console.log("[ws] emitting mission:created", { missionId, code: mission?.code });
+      // broadcast creation
+      io.to("mission:all").emit("mission:created", mission);
+      if (missionId) io.to(`mission:${missionId}`).emit("mission:created", mission);
+
+      // (optional) keep the existing signals for listeners that rely on them
+      emitMissionStatus(missionId, mission.status ?? "planned");
+      emitMissionProgress(missionId, Number(mission.progress_pct) || 0);
+      emitMissionEvent(missionId, "created", { via: "ws" });
+    } catch(error) {
+      console.error("[ws] emitMissionCreated error:", error);
+    }
   }
 
   return { 

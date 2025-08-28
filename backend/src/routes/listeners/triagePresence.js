@@ -10,8 +10,6 @@ async function fetchVisitWithName(visitId, logger) {
     const { rows } = await c.query(`
       SELECT v.id,
              v.crew_id      AS "crewId",
-             c.first_name   AS "first_name",
-             c.last_name    AS "last_name",
              c.name         AS "full_name",   -- in case you only store one field
              v.state, v.acuity, v.bed, v.ended_at
         FROM triage_visit v

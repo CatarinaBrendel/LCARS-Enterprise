@@ -1,5 +1,7 @@
 // ./frontend/src/components/commandOps/MissionList.jsx
-import React from "react";
+import React, {useEffect, useMemo, useCallback, useState} from "react";
+import { socket, onMissionCreated, subscribeMission, unsubscribeMission } from "../../lib/ws";
+import toUiStatus from "../../utils/mission_utils";
 
 export default function MissionList({
   // data
@@ -29,6 +31,44 @@ export default function MissionList({
   onClearFilters = () => {},
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const [live, setLive] = useState([]);
+
+  // subscribe to creations and keep a small live buffer
+  const handleCreated = useCallback((m) => {
+    console.debug("[MissionList] mission:created received", m);
+    if (!matchesFilters(m, { status, sector, search })) return;
+    setLive((prev) => (prev.some(x => x.id === m.id) ? prev : [m, ...prev]).slice(0, pageSize));
+  }, [status, sector, search, pageSize]);
+
+  useEffect(() => {
+    const off = onMissionCreated(handleCreated);
+    return off;
+  }, [handleCreated]);
+
+  // clear live buffer when leaving page 1 or changing sort/filter
+  useEffect(() => {
+    if (page !== 1) setLive([]);
+  }, [page, sortBy, sortDir, search, sector, status]);
+
+ useEffect(() => {
+   const probe = (m) => console.debug("[MissionList] direct socket listener got mission:created", m);
+   socket.on("mission:created", probe);
+   return () => socket.off("mission:created", probe);
+ }, []);
+
+  const merged = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const x of [...live, ...missions]) {
+      if (x && !seen.has(x.id)) { seen.add(x.id); out.push(x); }
+    }
+    return out;
+  }, [live, missions]);
+
+  useEffect(() => {
+    subscribeMission({});
+    return () => unsubscribeMission({});
+  }, []);
 
   const handleHeaderClick = (key) => {
     const nextDir = sortBy === key && sortDir === "asc" ? "desc" : "asc";
@@ -129,7 +169,7 @@ export default function MissionList({
               </tr>
             )}
 
-            {!loading && !error && missions.length === 0 && (
+            {!loading && !error && merged.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-6 text-zinc-400">
                   No missions found.
@@ -137,7 +177,10 @@ export default function MissionList({
               </tr>
             )}
 
-            {!loading && !error && missions.map((m) => (
+            {!loading && !error && merged.map((m) => {
+            const uiStatus = toUiStatus(m.status);
+            const pct = coercePct(m.progress ?? m.progress_pct);
+            return (
               <tr
                 key={m.id ?? m.code}
                 onClick={() => onSelect(m)}
@@ -145,27 +188,22 @@ export default function MissionList({
               >
                 <td className="px-4 py-2">{m.code}</td>
                 <td className="px-4 py-2">
-                  <span className={`rounded-lcars px-2 py-1 text-xs ${statusColor(m.status)}`}>
-                    {m.status}
+                  <span className={`rounded-lcars px-2 py-1 text-xs ${statusColor(uiStatus)}`}>
+                   {uiStatus}
                   </span>
                 </td>
                 <td className="px-4 py-2">{m.sector}</td>
                 <td className="px-4 py-2 truncate">{m.authority}</td>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
-                    {(() => {
-                     const pct = coercePct(m.progress ?? m.progress_pct);
-                     return (
-                       <>
-                         <div className="h-2 rounded bg-lcars-gold" style={{ width: `${pct}%` }} />
-                         <span className="text-xs">{pct}%</span>
-                       </>
-                     );
-                   })()}
+                    <>
+                      <div className="h-2 rounded bg-lcars-gold" style={{ width: `${pct}%` }} />
+                      <span className="text-xs">{pct}%</span>
+                    </>
                   </div>
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
@@ -236,3 +274,16 @@ function coercePct(v) {
   const n = Number.isFinite(v) ? v : Number(v ?? 0);
   return Math.max(0, Math.min(100, Math.round(n)));
 }
+
+function matchesFilters(m, { status, sector, search }) {
+  const ui = toUiStatus(m.status);
+  if (status?.length && !status.includes(ui)) return false;
+  if (sector && m.sector !== sector) return false;
+  if (search) {
+    const s = search.toLowerCase();
+    const hay = [m.code, m.authority, m.sector].map(v => String(v ?? '').toLowerCase());
+    if (!hay.some(v => v.includes(s))) return false;
+  }
+  return true;
+}
+

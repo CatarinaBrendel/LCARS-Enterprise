@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useMissions } from "../../hooks/useMissions";
 import { listSectors } from "../../lib/missions";
 import MissionList from "./MissionList";
@@ -6,8 +6,10 @@ import Modal from "../ui/Modal";
 import MissionDetails from "./MissionDetails";
 import {
   subscribeMission, unsubscribeMission,
-  onMissionProgress, onMissionStatus
+  onMissionProgress, onMissionStatus, onMissionCreated
 } from "../../lib/ws";
+import toUiStatus from "../../utils/mission_utils";
+import { fetchMissionById } from "../../lib/api";
 
 /** Map backend status → list display label */
 function wsToListStatus(s = "") {
@@ -21,6 +23,20 @@ function wsToListStatus(s = "") {
     default:            return String(s || "").toUpperCase();
   }
 }
+
+// add this helper near the top of the file
+function matchesFilters(m, { status, sector, search }) {
+  const ui = toUiStatus(m.status);
+  if (status?.length && !status.includes(ui)) return false;
+  if (sector && m.sector !== sector) return false;
+  if (search) {
+    const s = search.toLowerCase();
+    const hay = [m.code, m.authority, m.sector].map(v => String(v ?? '').toLowerCase());
+    if (!hay.some(v => v.includes(s))) return false;
+  }
+  return true;
+}
+
 const clampPct = (n) => Math.max(0, Math.min(100, Math.round(Number(n || 0))));
 
 export default function MissionOverview() {
@@ -34,12 +50,12 @@ export default function MissionOverview() {
     status, setStatus,
     sector, setSector,
     loading, error,
-    hasIncoming, showIncoming
   } = useMissions({ page: 1, pageSize: 25, sortBy: "started_at", sortDir: "desc" });
 
   const [sectors, setSectors] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [pendingNav, setPendingNav] = useState(null);
+  const inflightRef = useRef(new Set());
 
   // id -> { progress, status } to override rows without refetching
   const [overrides, setOverrides] = useState(() => new Map());
@@ -54,6 +70,49 @@ export default function MissionOverview() {
     });
   };
 
+  // ── LIVE BUFFER (prepend new missions on page 1) ────────────────────────────
+  const [live, setLive] = useState([]);
+
+  // refs to keep latest filter/page values without re-subscribing
+  const stRef = React.useRef({ status, sector, search, page, pageSize });
+  useEffect(() => { stRef.current = { status, sector, search, page, pageSize }; },
+                [status, sector, search, page, pageSize]);
+
+  // subscribe to "all" ONCE
+  useEffect(() => {
+    subscribeMission({});
+    return () => unsubscribeMission({});
+  }, []);
+
+  // listen to mission:created ONCE; push into live if visible under current filters and on page 1
+  useEffect(() => {
+    const handler = (m) => {
+      const { status, sector, search, page, pageSize } = stRef.current;
+      if (page !== 1) return;
+
+      const ui = toUiStatus(m.status);
+      if (status?.length && !status.includes(ui)) return;
+      if (sector && m.sector !== sector) return;
+      if (search) {
+        const s = search.toLowerCase();
+        const hay = [m.code, m.authority, m.sector].map(v => String(v ?? '').toLowerCase());
+        if (!hay.some(v => v.includes(s))) return;
+      }
+
+      setLive(prev => (prev.some(x => x.id === m.id) ? prev : [m, ...prev]).slice(0, pageSize));
+    };
+
+    const off = onMissionCreated(handler);
+    return off; // removed only on unmount
+  }, []);
+
+  // clear or trim live when paging/sorting/filtering away
+  useEffect(() => {
+    if (page !== 1) setLive([]);
+    else setLive(prev => prev.slice(0, pageSize));
+  }, [page, sortBy, sortDir, search, sector, status, pageSize]);
+  // ── END LIVE BUFFER ────────────────────────────────────────────────────────
+
   useEffect(() => {
     let alive = true;
     const ctrl = new AbortController();
@@ -63,36 +122,72 @@ export default function MissionOverview() {
     return () => { alive = false; ctrl.abort(); };
   }, []);
 
-  // Subscribe to ALL missions so the list reacts live
+  // WS status/progress overrides (register ONCE)
   useEffect(() => {
-    subscribeMission({}); // join "mission:all"
-
     const offProg = onMissionProgress(({ missionId, progress_pct }) => {
       patchRow(String(missionId), { progress: clampPct(progress_pct) });
     });
+    
+     const offStatus = onMissionStatus(async ({ missionId, status }) => {
+    const s = String(status);
+    const idStr = String(missionId);
 
-    const offStatus = onMissionStatus(({ missionId, status }) => {
-      const s = String(status);
-      const partial = { status: wsToListStatus(s) };
-      if (s === "planned" || s === "not_started" || s.toUpperCase() === "NOT STARTED") {
-        // ensure the progress bar resets immediately even if progress event lags
-        partial.progress = 0;
+    // patch existing rows
+    const partial = { status: wsToListStatus(s) };
+    if (s === "planned" || s === "not_started" || s.toUpperCase() === "NOT STARTED") {
+      partial.progress = 0;
+    }
+    patchRow(idStr, partial);
+
+    // If mission is not on current page, fetch it
+    const { status: filtStatus, sector, search, page, pageSize } = stRef.current;
+    if (page !== 1) return;
+
+    const alreadyHere = [...live, ...missions].some(m => String(m?.id) === idStr);
+    if (alreadyHere) return;
+
+    if (inflightRef.current.has(idStr)) return;
+    inflightRef.current.add(idStr);
+
+    try {
+    const { data: m } = await fetchMissionById(idStr);
+    const next = { ...m, status: s };
+
+      if (matchesFilters(next, { status: filtStatus, sector, search })) {
+        setLive(prev =>
+          (prev.some(x => String(x.id) === idStr) ? prev : [next, ...prev]).slice(0, pageSize)
+        );
       }
-      patchRow(missionId, partial);
+    } catch (err) {
+      console.warn("fetchMissionById error", idStr, err);
+    } finally {
+      inflightRef.current.delete(idStr);
+    }
+  });
+    
+    const offCreated = onMissionCreated((m) => {
+      const { status: filtStatus, sector, search, page, pageSize } = stRef.current;
+      if (page !== 1) return;
+      if (matchesFilters(m, { status: filtStatus, sector, search })) {
+        setLive(prev => (prev.some(x => x.id === m.id) ? prev : [m, ...prev]).slice(0, pageSize));
+      }
     });
 
-    return () => {
-      offProg();
-      offStatus();
-      unsubscribeMission({});
-    };
-  }, []);
+    return () => { offProg(); offStatus(); offCreated(); };
+  }, [live, missions]);
 
-  // Merge overrides into current page items
+  // Merge: live (new first) + server page, then apply overrides; dedupe by id
   const displayMissions = useMemo(() => {
-    if (!missions?.length) return missions;
-    return missions.map(m => ({ ...m, ...(overrides.get(String(m.id)) || {}) }));
-   }, [missions, overrides]);
+    const seen = new Set();
+    const merged = [...live, ...missions].filter(x => {
+      if (!x) return false;
+      const id = x.id ?? x.code; // safety
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    return merged.map(m => ({ ...m, ...(overrides.get(String(m.id)) || {}) }));
+  }, [missions, live, overrides]);
 
   const availableStatuses = useMemo(
     () => ["NOT STARTED", "IN PROGRESS", "HOLD", "BLOCKED", "DONE", "ABORTED"],
@@ -100,42 +195,39 @@ export default function MissionOverview() {
   );
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const idx = missions.findIndex(m => m.id === selectedId);
+  const idx = (displayMissions ?? []).findIndex(m => m.id === selectedId);
 
   function openPrev() {
     if (!selectedId) return;
-    if (idx > 0) setSelectedId(missions[idx - 1].id);
+    if (idx > 0) setSelectedId(displayMissions[idx - 1].id);
     else if (page > 1) { setPendingNav("prev"); setPage(page - 1); }
   }
   function openNext() {
     if (!selectedId) return;
-    if (idx >= 0 && idx < missions.length - 1) setSelectedId(missions[idx + 1].id);
+    if (idx >= 0 && idx < displayMissions.length - 1) setSelectedId(displayMissions[idx + 1].id);
     else if (page < totalPages) { setPendingNav("next"); setPage(page + 1); }
   }
   useEffect(() => {
-    if (!pendingNav || loading || missions.length === 0) return;
-    if (pendingNav === "next") setSelectedId(missions[0].id);
-    if (pendingNav === "prev") setSelectedId(missions[missions.length - 1].id);
+    if (!pendingNav || loading || displayMissions.length === 0) return;
+    if (pendingNav === "next") setSelectedId(displayMissions[0].id);
+    if (pendingNav === "prev") setSelectedId(displayMissions[displayMissions.length - 1].id);
     setPendingNav(null);
-  }, [missions, loading, pendingNav]);
+  }, [displayMissions, loading, pendingNav]);
 
   return (
     <div className="p-6">
       <h1 className="text-2xl mb-4">Missions</h1>
-      {hasIncoming && (
-      <div className="mb-3">
-        <button
-          className="rounded-lcars bg-lcars-gold text-black px-3 py-1"
-          onClick={showIncoming}
-        >
-          New missions available — Show
-        </button>
-      </div>
-    )}
+
+      {/* Optional: show a small hint when live buffer has items */}
+      {page === 1 && live.length > 0 && (
+        <div className="mb-3 text-sm opacity-70">
+          Showing {live.length} new mission{live.length > 1 ? "s" : ""} live…
+        </div>
+      )}
 
       <MissionList
         missions={displayMissions}
-        loading={loading}
+        loading={loading && (displayMissions?.length ?? 0) === 0}
         error={error}
         page={page}
         pageSize={pageSize}
@@ -169,7 +261,7 @@ export default function MissionOverview() {
             </button>
             <button className="rounded-lcars bg-zinc-800 hover:bg-zinc-700 px-3 py-1 disabled:opacity-40"
                     onClick={openNext}
-                    disabled={!selectedId || (idx === missions.length - 1 && page >= totalPages)}>
+                    disabled={!selectedId || (idx === displayMissions.length - 1 && page >= totalPages)}>
               Next ›
             </button>
             <span className="text-sm opacity-70">Page {page} / {totalPages}</span>
@@ -179,8 +271,6 @@ export default function MissionOverview() {
         <MissionDetails
           missionId={selectedId}
           onLocalPatch={(partial) => {
-            // DEBUG: should fire instantly when you click a new status
-            console.log("[parent] local patch", selectedId, partial);
             if (!selectedId) return;
             const mapped = {};
             if (partial.status) mapped.status = wsToListStatus(partial.status);

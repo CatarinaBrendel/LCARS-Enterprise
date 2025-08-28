@@ -1,4 +1,5 @@
 import { getClient, query } from "../../../database/db.js";
+import { SECTORS, AUTHORITIES, OBJ_TITLES } from "./missionGenerator.js";
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 if (!globalThis.__missionSim) globalThis.__missionSim = { running: false };
@@ -10,7 +11,10 @@ export async function startMissionSimulator({
   emitMissionProgress,
   emitMissionObjective,
   emitMissionEvent,
-  intervalMs = Number(process.env.MISSION_SIM_INTERVAL_MS) || 5000,
+  intervalMs = Number(process.env.MISSION_SIM_INTERVAL_MS) || 5000, // kept for backwards compat (dev only)
+  minStepMs = Number(process.env.MISSION_SIM_MIN_MS) || 15_000,     // 15s
+  maxStepMs = Number(process.env.MISSION_SIM_MAX_MS) || 300_000,
+  ensureOneRunning = ["1","true","yes"].includes(String(process.env.MISSION_SIM_ENSURE_ONE ?? "true").toLowerCase()),
   advanceChance = Number(process.env.MISSION_SIM_ADVANCE_CHANCE) || 0.6,
   blockChance = Number(process.env.MISSION_SIM_BLOCK_CHANCE) || 0.12,
   unblockChance = Number(process.env.MISSION_SIM_UNBLOCK_CHANCE) || 0.18,
@@ -18,6 +22,101 @@ export async function startMissionSimulator({
     String(process.env.MISSION_SIM_COMPLETE_ON_ALL_DONE || "true").toLowerCase()
   ),
 } = {}) {
+
+     // --------- utils ----------
+  async function countInProgress() {
+    const { rows } = await query(`SELECT COUNT(*)::int AS n FROM mission WHERE status='in_progress'`);
+    return rows[0]?.n ?? 0;
+  }
+
+  async function promoteRunnableToRunning() {
+    // promote the freshest planned/hold mission
+    const { rows } = await query(`
+      WITH cand AS (
+        SELECT id
+          FROM mission
+         WHERE status IN ('planned','hold')
+         ORDER BY COALESCE(started_at, updated_at) DESC, id DESC
+         LIMIT 1
+      )
+      UPDATE mission m
+         SET status='in_progress',
+             started_at=COALESCE(started_at, NOW()),
+             updated_at=NOW()
+        FROM cand
+       WHERE m.id = cand.id
+      RETURNING m.id
+    `);
+    return rows[0]?.id ?? null;
+  }
+
+  function randCode() {
+    // short readable code e.g. SIM-5F2C
+    return 'SIM-' + Math.random().toString(16).slice(2, 6).toUpperCase();
+  }
+
+  async function createAndStartMission() {
+    const sector = pick(SECTORS);
+    const authority = pick(AUTHORITIES);
+    const code = randCode();
+
+    const { rows: mRows } = await query(
+      `INSERT INTO mission (code, sector, authority, status, started_at, updated_at)
+       VALUES ($1, $2, $3, 'in_progress', NOW(), NOW())
+       RETURNING id`,
+      [code, sector, authority]
+    );
+    const missionId = mRows[0].id;
+
+    // 3–5 simple objectives
+    const titles = [...OBJ_TITLES].sort(() => 0.5 - Math.random()).slice(0, 3 + Math.floor(Math.random()*3));
+    for (let i = 0; i < titles.length; i++) {
+      const priority = titles.length - i;
+      const state = i === 0 ? 'in_progress' : 'not_started';
+      await query(
+        `INSERT INTO mission_objective (mission_id, priority, state, title)
+        VALUES ($1, $2, $3, $4)`,
+        [missionId, priority, state, titles[i]]
+      );
+    }
+
+    await query(
+      `INSERT INTO mission_event (mission_id, kind, payload)
+       VALUES ($1, 'resume', '{"sim":"ensureOne"}'::jsonb)`,
+      [missionId]
+    );
+
+    await recalcMissionProgress(missionId);
+    const { rows: p } = await query(`SELECT progress_pct FROM mission WHERE id = $1`, [missionId]);
+    const pct = Number(p[0]?.progress_pct ?? 0);
+
+    emitMissionStatus(missionId, 'in_progress');
+    emitMissionProgress(missionId, pct);
+    return missionId;
+  }
+
+  async function ensureOneMissionRunning() {
+    if (!ensureOneRunning) return;
+    const n = await countInProgress();
+    if (n > 0) return; // already running
+    // try to promote an existing planned/hold; otherwise create a new mission
+    const promoted = await promoteRunnableToRunning();
+    if (promoted) {
+      await recalcMissionProgress(promoted);
+      const { rows: p } = await query(`SELECT progress_pct FROM mission WHERE id = $1`, [promoted]);
+      emitMissionStatus(promoted, 'in_progress');
+      emitMissionProgress(promoted, Number(p[0]?.progress_pct ?? 0));
+      return;
+    }
+    await createAndStartMission();
+  }
+
+  // --- set random delays for progresing a mission ---
+  function randomDelay(min, max) {
+    if (max <= min) return Math.max(0, min);
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
   // --------- advisory lock so only one simulator runs -----------
   const LOCK_KEY = 424242;
   const lockClient = await getClient();
@@ -85,7 +184,9 @@ export async function startMissionSimulator({
 
   async function getCurrentMission() {
     const { rows } = await query(
-      `SELECT id, status FROM mission
+      `SELECT id, status
+         FROM mission
+        WHERE status IN ('planned','in_progress','hold')
         ORDER BY
           (status = 'in_progress') DESC,
           (status = 'hold')        DESC,
@@ -99,16 +200,21 @@ export async function startMissionSimulator({
 
   async function tick() {
     const mission = await getCurrentMission();
-    if (!mission) return;
+    if (!mission) {
+      await ensureOneMissionRunning(); // guarantee at least one running
+      return;
+    }
+    if (mission.status === 'completed' || mission.status === 'aborted') return;
+
 
     // Start a planned/hold mission
-    if (mission.status !== "in_progress") {
+    if (mission.status === "planned" || mission.status === "hold") {
       await query(
         `UPDATE mission
            SET status = 'in_progress',
                started_at = COALESCE(started_at, NOW()),
                updated_at = NOW()
-         WHERE id = $1 AND status <> 'in_progress'`,
+         WHERE id = $1 AND status IN ('planned', 'hold')`,
         [mission.id]
       );
       await query(
@@ -132,7 +238,46 @@ export async function startMissionSimulator({
         ORDER BY priority DESC, id ASC`,
       [mission.id]
     );
-    if (objs.length === 0) return;
+    
+    if (objs.length === 0) {
+      if (completeOnAllDone) {
+        // auto-complete empty missions so they don't get stuck
+        await query('BEGIN');
+        try {
+          await query(
+            `UPDATE mission
+                SET status = 'completed',
+                    ended_at = COALESCE(ended_at, NOW()),
+                    progress_pct = 100,
+                    updated_at = NOW()
+              WHERE id = $1 AND status <> 'completed'`,
+            [mission.id]
+          );
+          await query(
+            `INSERT INTO mission_event (mission_id, kind, payload)
+              VALUES ($1, 'completed', '{"sim":"auto_zero_objectives"}'::jsonb)`,
+            [mission.id]
+          );
+          await query('COMMIT');
+          emitMissionStatus(mission.id, 'completed');
+          emitMissionProgress(mission.id, 100);
+          emitMissionEvent(mission.id, 'completed', { sim: 'auto_zero_objectives' });
+        } catch (e) {
+          await query('ROLLBACK');
+          console.error('[missionSim] auto-complete (0 objectives) failed', e);
+        }
+      } else {
+        // alternatively: seed a minimal objective and continue next tick
+        await query(
+          `INSERT INTO mission_objective (mission_id, title, details, state, priority, created_at, updated_at)
+            VALUES ($1,'Primary objective','Auto-seeded because mission had none','in_progress',1,NOW(),NOW())`,
+          [mission.id]
+        );
+        emitMissionEvent(mission.id, 'objective_state', { objective_id: null, to: 'in_progress', auto: 'seeded' });
+        await recalcMissionProgress(mission.id);
+      }
+      return;
+    }
 
     const candidates = objs.filter((o) => o.state !== "done");
     if (candidates.length === 0) {
@@ -236,12 +381,36 @@ export async function startMissionSimulator({
   }
 
   // kick + loop
-  await tick();
-  const timer = setInterval(tick, intervalMs);
-  console.log(`[missionSim] running every ${intervalMs}ms`);
-
+  let timeoutId = null;
+  async function loopOnceThenSchedule() {
+    try {
+      await tick();
+    } finally {
+      // choose delay: prefer random window; if explicitly setInterval-like in dev, honor that
+      const delay = process.env.MISSION_SIM_INTERVAL_MS
+        ? intervalMs
+        : randomDelay(minStepMs, maxStepMs);
+      timeoutId = setTimeout(loopOnceThenSchedule, delay);
+      if (!process.env.MISSION_SIM_INTERVAL_MS) {
+        // light log sometimes to avoid spam
+        if (Math.random() < 0.05) {
+          console.log(`[missionSim] next tick in ~${Math.round(delay/1000)}s`);
+        }
+      } else {
+        // legacy fixed mode
+        // (no extra log each time to keep noise low)
+      }
+    }
+  }
+  await loopOnceThenSchedule();
+  console.log(
+    process.env.MISSION_SIM_INTERVAL_MS
+      ? `[missionSim] fixed interval every ${intervalMs}ms (dev mode)`
+      : `[missionSim] randomized interval: ${minStepMs}ms – ${maxStepMs}ms`
+  );
+ 
   return async () => {
-    clearInterval(timer);
+    if (timeoutId) clearTimeout(timeoutId);
     globalThis.__missionSim.running = false;
     try { await lockClient.query("SELECT pg_advisory_unlock($1)", [LOCK_KEY]); } catch {}
     try { lockClient.release(); } catch {}

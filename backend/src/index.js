@@ -116,6 +116,10 @@ if (process.env.ENABLE_TRIAGE_SIM === 'true') {
 // -- Mission Generator --
 if(process.env.ENABLE_MISSION_GENERATOR === 'true') {
   const {emitMissionCreated} = app.get('ws') || {};
+  console.log('[missionGen] ENABLED, typeof emitMissionCreated =', typeof emitMissionCreated);
+  if (!emitMissionCreated) {
+    console.warn("[missionGen] WARNING: no emitMissionCreated bound, missions won't reach clients");
+  }
   const stop = startMissionGenerator({emitMissionCreated});
   app.set('missionGenStop', stop);
 };

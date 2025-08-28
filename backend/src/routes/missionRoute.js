@@ -326,7 +326,7 @@ router.patch('/:id', async (req, res, next) => {
     const vals = [id, status];
 
     // Reset when going back to "planned" (aka UI "not_started")
-    if (status === 'planned') {
+    if (status === 'planned' && prev === 'planned') {
       await query(
         `UPDATE mission_objective
             SET state = 'not_started', updated_at = NOW()
@@ -400,6 +400,26 @@ router.patch('/:id', async (req, res, next) => {
     }
 
     res.json({ ok: true, id, status: after[0]?.status ?? status, progress_pct: after[0]?.progress_pct ?? 0 });
+    
+    // ----- GUARDS -----
+    // R1: completed is terminal (DONE can't change to anything else)
+    if (prev === 'completed' && status !== 'completed') {
+      await query('ROLLBACK');
+      return res.status(409).json({
+        error: 'completed_is_final',
+        message: 'Completed missions cannot change status.'
+      });
+    }
+  
+    // R2: cannot reset to planned (aka UI not_started) after leaving it
+    if (status === 'planned' && prev !== 'planned') {
+      await query('ROLLBACK');
+      return res.status(409).json({
+        error: 'cannot_reset_to_planned',
+        message: 'Mission cannot be reset to not started after progress has begun.'
+      });
+    }
+  
   } catch (err) {
     await query('ROLLBACK');
     next(err);

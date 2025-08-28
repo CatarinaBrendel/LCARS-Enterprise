@@ -25,3 +25,16 @@ export async function computeEffectiveSummary() {
 
   return { total, onDuty, busy, busyPct, ts: new Date() };
 }
+
+export async function fetchNewMission(missionId) {
+  const { rows } = await query(`
+      SELECT id, code, sector, authority, status, progress_pct,
+             stardate, started_at, ended_at, updated_at
+      FROM mission
+      WHERE id = $1
+    `, [missionId]);
+    const mission = rows[0];
+    if (!mission) return;
+
+    return mission;
+}

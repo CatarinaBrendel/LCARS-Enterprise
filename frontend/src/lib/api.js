@@ -7,6 +7,10 @@ const api = axios.create({
   headers: { Accept: 'application/json' },
 })
 
+// ---------------------------------------------------------------------------
+// Crew
+// ---------------------------------------------------------------------------
+
 // Example call: Crew-status
 export async function getCrewStatus() {
   const start = performance.now()
@@ -21,5 +25,30 @@ export async function getCrewStatus() {
     const wrapped = new Error(message)
     wrapped.latencyMs = latencyMs
     throw wrapped
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Missions
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch a single mission by id.
+ *
+ * @param {string|number} id
+ * @returns {Promise<object>} the mission object
+ */
+export async function fetchMissionById(id) {
+  const start = performance.now();
+  try {
+    const res = await api.get(`/missions/${encodeURIComponent(id)}`);
+    const latencyMs = Math.round(performance.now() - start);
+    return { data: res.data, latencyMs };
+  } catch (err) {
+    const latencyMs = Math.round(performance.now() - start);
+    const message = toErrorMessage(err);
+    const wrapped = new Error(message);
+    wrapped.latencyMs = latencyMs;
+    throw wrapped;
   }
 }

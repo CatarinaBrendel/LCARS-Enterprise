@@ -10,6 +10,20 @@ export const socket = io(API_ORIGIN, {
   withCredentials: true,
 });
 
+// --- DEBUG: remove when done ---
+if (typeof window !== "undefined") {
+  window._ws = socket; // handy in DevTools
+}
+socket.on("connect",    () => console.log("[ws] connected", socket.id));
+socket.on("connect_error", (err) => console.warn("[ws] connect_error", err?.message || err));
+socket.on("disconnect", (r) => console.log("[ws] disconnected", r));
+socket.onAny((event, ...args) => {
+  if (String(event).startsWith("mission:")) {
+    console.log("[ws] event", event, args?.[0]);
+  }
+});
+// --- DEBUG end ---
+
 export function getSocket() {
   return socket;
 }
@@ -22,20 +36,32 @@ const missionRooms = new Set();
 export function subscribeTelemetry({ crewId, metrics } = {}) {
   socket.emit("telemetry:subscribe", { crewId, metrics });
 }
+
 export function unsubscribeTelemetry({ crewId, metrics } = {}) {
   socket.emit("telemetry:unsubscribe", { crewId, metrics });
 }
 
 // Mission subscriptions
 export function subscribeMission({ missionId } = {}) {
-  socket.emit("mission:subscribe", { missionId });
+  const payload = missionId ? { missionId } : {};
+  if (!socket.connected) {
+    // queue until connected to avoid an early emit being lost in some setups
+    socket.once("connect", () => socket.emit("mission:subscribe", payload));
+  } else {
+    socket.emit("mission:subscribe", payload);
+  }
   if(missionId) missionRooms.add(missionId);
   else subscribeAll = true;
 }
 
 export function unsubscribeMission({ missionId } = {}) {
-  socket.emit("mission:unsubscribe", { missionId });
-  if(missionId) missionRooms.add(missionId);
+  const payload = missionId ? { missionId } : {};
+  if (!socket.connected) {
+    socket.once("connect", () => socket.emit("mission:unsubscribe", payload));
+  } else {
+    socket.emit("mission:unsubscribe", payload);
+  }
+  if(missionId) missionRooms.delete(missionId);
   else subscribeAll = false;
 }
 
@@ -61,6 +87,15 @@ export function onMissionObjective(handler) {
 export function onMissionEvent(handler) {
   socket.on("mission:event", handler);
   return () => socket.off("mission:event", handler);
+}
+
+export function onMissionCreated(handler) {
+  console.debug('[ws] onMissionCreated: registering handler', handler);
+  socket.on('mission:created', handler);
+  return () => {
+    console.debug('[ws] onMissionCreated: removing handler', handler);
+    socket.off('mission:created', handler);
+  }
 }
 
 // Back-compat aggregator: normalize multiple events into one stream

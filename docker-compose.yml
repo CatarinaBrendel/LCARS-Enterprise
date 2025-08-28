@@ -73,6 +73,9 @@ services:
       ENABLE_MISSION_GENERATOR: true
       MISSION_GEN_MIN: 30s
       MISSION_GEN_MAX: 1h
+      MISSION_SIM_MIN_MS: 15_000
+      MISSION_SIM_MAX_MS: 1_800_000
+      MISSION_SIM_ENSURE_ONE: true
 
     volumes:
       - ./backend:/usr/src/app
