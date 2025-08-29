@@ -7,6 +7,7 @@ import DashboardGrid from './components/DashboardGrid';
 import { getTabTitle } from './components/TabRegistry';
 import MissionOverview from './components/commandOps/missionOverview';
 import LcarsSidebar from './components/LcarsSidebar';
+import EngineeringSystemsTab from './components/engineering/EngineeringSystemsTab';
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
@@ -28,9 +29,7 @@ export default function App() {
           <div className="p-6 opacity-70">Science & Navigation — coming soon</div>
         )}
         {tab === "medical" && <MedicalTab />}
-        {tab === "engineering_systems" && (
-          <div className="p-6 opacity-70">Engineering & Ship Systems — coming soon</div>
-        )}
+        {tab === "engineering_systems" && <EngineeringSystemsTab />}
         {tab === "logs" && <div className="p-6 opacity-70">Logs — coming soon</div>}
         {tab === "blueprint" && (
           <div className="p-6 opacity-70">Ship Blueprint — coming soon</div>

@@ -1,4 +1,4 @@
-import { getClient } from '../../database/db.js';
+import { getClient } from '../../../database/db.js';
 
 /** Subscribes to NOTIFY 'rt_mission' and forwards payloads to a callback */
 export async function createMissionPgListener(onPayload) {

@@ -1,4 +1,3 @@
-// frontend/src/components/LcarsSubnav.jsx
 export default function LcarsSubnav({ value, onChange, items = [
   { id: "status", label: "STATUS" },
   { id: "presence", label: "PRESENCE" },

@@ -46,8 +46,8 @@ services:
       NODE_ENV: development
       STARTUP_MIGRATE: block   # background | block | off
       STARTUP_SEED: "true"
-      ENABLE_SIM: "true"
-      ENABLE_TRIAGE_SIM: "true"
+      ENABLE_SIM: "false"
+      ENABLE_TRIAGE_SIM: "false"
       TRIAGE_SIM_INTERVAL_MS: "5000"
       TRIAGE_SIM_ADMIT_CHANCE: "0.25"
       TRIAGE_SIM_MAX: "4"
@@ -64,7 +64,7 @@ services:
       TRIAGE_SIM_MIN_GOOD: "0"
       ENABLE_PRESENCE_SUMMARY: "true"
       PRESENCE_SUMMARY_INTERVAL_MS: 10000
-      ENABLE_MISSION_SIM: true
+      ENABLE_MISSION_SIM: false
       MISSION_SIM_INTERVAL_MS: 5000
       MISSION_SIM_ADVANCE_CHANCE: 0.6
       MISSION_SIM_BLOCK_CHANCE: 0.12

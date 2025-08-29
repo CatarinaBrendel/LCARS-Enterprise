@@ -1,0 +1,162 @@
+.
+├── .env
+├── .github
+│   └── workflows
+│       └── ci.yml
+├── .gitignore
+├── .vscode
+│   └── settings.json
+├── backend
+│   ├── __tests__
+│   │   ├── __mocks__
+│   │   │   └── node-cron.js
+│   │   ├── _db.js
+│   │   ├── _server.js
+│   │   ├── _teardown_per_file.js
+│   │   ├── _teardown.js
+│   │   ├── _timers.js
+│   │   ├── crew.overview.test.js
+│   │   ├── crew.series.test.js
+│   │   ├── crewPresence.test.js
+│   │   ├── crewStats.test.js
+│   │   ├── globalSetup.js
+│   │   ├── globalTeardown.js
+│   │   ├── health.test.js
+│   │   ├── ingest.e2e.test.js
+│   │   ├── mission_list.test.js
+│   │   ├── mission_simulator.test.js
+│   │   ├── mission.test.js
+│   │   ├── retention.test.js
+│   │   ├── setupTests.js
+│   │   └── triage.test.js
+│   ├── .dockerignore
+│   ├── .env
+│   ├── .env.test
+│   ├── database
+│   │   ├── db.js
+│   │   ├── init
+│   │   │   └── 000_create_dbs.sql
+│   │   ├── init.js
+│   │   └── migrations
+│   │       ├── 001_crew.sql
+│   │       ├── 002_metrics_events.sql
+│   │       ├── 003_crew_dev_data.sql
+│   │       ├── 004_retention.sql
+│   │       ├── 005_retention_fix.sql
+│   │       ├── 006_crew_external_id.sql
+│   │       ├── 007_presence.sql
+│   │       ├── 008_triage.sql
+│   │       ├── 009_triage_visit_event.sql
+│   │       ├── 010_presence_guard.sql
+│   │       ├── 011_mission_core.sql
+│   │       ├── 012_mission_indexes.sql
+│   │       ├── 013_mission_seed_dev.sql
+│   │       ├── 014_mission_notify.sql
+│   │       ├── 015_mission_dev_data.sql
+│   │       ├── 016_mission_add_constraint.sql
+│   │       ├── 017_mission_progress_pct.sql
+│   │       └── 018_mission_status_guards.sql
+│   ├── Dockerfile
+│   ├── eslint.config.js
+│   ├── jest.config.cjs
+│   ├── jest.globalTeardown.js
+│   ├── loadEnv.js
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── pnpm-lock.yaml
+│   ├── scripts
+│   │   └── migrate.js
+│   └── src
+│       ├── app.js
+│       ├── index.js
+│       ├── retention.js
+│       ├── routes
+│       │   ├── crewRoute.js
+│       │   ├── healthRoute.js
+│       │   ├── internal
+│       │   ├── listeners
+│       │   ├── missionRoute.js
+│       │   ├── presence
+│       │   ├── simulators
+│       │   └── triageRoute.js
+│       └── websocket.js
+├── database
+│   └── init
+├── docker-compose.yml
+├── frontend
+│   ├── .gitignore
+│   ├── .pnpm-store
+│   │   └── v10
+│   │       ├── files
+│   │       └── index
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── pnpm-lock.yaml
+│   ├── postcss.config.js
+│   ├── public
+│   │   └── vite.svg
+│   ├── README.md
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.jsx
+│   │   ├── assets
+│   │   │   ├── react.svg
+│   │   │   └── sovereign2.jpg
+│   │   ├── components
+│   │   │   ├── commandOps
+│   │   │   ├── crew
+│   │   │   ├── CrewPresenceView.jsx
+│   │   │   ├── CrewStatus.jsx
+│   │   │   ├── DashboardGrid.jsx
+│   │   │   ├── LcarsButton.jsx
+│   │   │   ├── LcarsCard.jsx
+│   │   │   ├── LcarsHeaderBar.jsx
+│   │   │   ├── LcarsMeter.jsx
+│   │   │   ├── LcarsPillButton.jsx
+│   │   │   ├── LcarsSidebar.jsx
+│   │   │   ├── LcarsSubnav.jsx
+│   │   │   ├── LivePanel.jsx
+│   │   │   ├── medical
+│   │   │   ├── MedicalTab.jsx
+│   │   │   ├── TabRegistry.jsx
+│   │   │   ├── TelemetryLogTable.jsx
+│   │   │   ├── ui
+│   │   │   └── widgets
+│   │   ├── hooks
+│   │   │   ├── useCrewOverview.js
+│   │   │   ├── useCrewStatsLive.js
+│   │   │   ├── useLatestByCrewMetric.js
+│   │   │   ├── useMission.js
+│   │   │   ├── useMissions.js
+│   │   │   ├── usePresence.js
+│   │   │   ├── useTelemetryStream.js
+│   │   │   └── useTriage.js
+│   │   ├── index.css
+│   │   ├── lib
+│   │   │   ├── api.js
+│   │   │   ├── missions.js
+│   │   │   └── ws.js
+│   │   ├── main.jsx
+│   │   └── utils
+│   │       ├── helpers.js
+│   │       └── mission_utils.js
+│   ├── tailwind.config.js
+│   └── vite.config.mjs
+├── main
+│   ├── electron.cjs
+│   ├── package-lock.json
+│   ├── package.json
+│   └── preload.cjs
+├── Makefile
+├── ops
+│   └── nginx
+│       └── dev.conf
+├── prisma
+│   └── schema.prisma
+├── Project Overview.png
+├── Project Schematic.drawio
+└── tree.txt
+
+40 directories, 120 files

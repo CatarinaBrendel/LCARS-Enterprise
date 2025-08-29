@@ -44,31 +44,66 @@ async function countObjectiveStateEvents(missionId, objId) {
 }
 
 beforeAll(async () => {
-  // Minimal seed: one mission in_progress with 3 objectives
-  const m = await query(
-    `INSERT INTO mission (code, stardate, sector, authority, status, started_at)
-     VALUES ('TEST-MISS', 9000.0, 'Alpha', 'Starfleet', 'in_progress', NOW())
-     RETURNING id`
-  );
-  missionId = m.rows[0].id;
+  // Stable test code. Add a worker suffix so parallel Jest workers don't race on the same code.
+  const CODE = `TEST-MISS-${process.env.JEST_WORKER_ID || 1}`;
 
-  const objs = await query(
-    `INSERT INTO mission_objective (mission_id, title, details, state, priority)
-     VALUES
+  // 1) Idempotent + parallel-safe mission seed
+  const ins = await query(
+    `
+    INSERT INTO mission (code, stardate, sector, authority, status, started_at)
+    VALUES ($1, 9000.0, 'Alpha', 'Starfleet', 'in_progress', NOW())
+    ON CONFLICT (code)
+      DO UPDATE SET
+        -- no-op update keeps row the same, but RETURNING works on the existing row
+        code = EXCLUDED.code
+    RETURNING id
+    `,
+    [CODE]
+  );
+
+  // If for any reason RETURNING didn't produce a row (it should), SELECT as a fallback.
+  if (!ins.rows[0]?.id) {
+    const sel = await query(`SELECT id FROM mission WHERE code = $1`, [CODE]);
+    if (!sel.rows[0]) throw new Error("Mission upsert failed to return or find id");
+    missionId = sel.rows[0].id;
+  } else {
+    missionId = ins.rows[0].id;
+  }
+
+  // 2) Objectives — avoid duplicates when tests re-run
+  // If you have (mission_id, title) unique, use ON CONFLICT; otherwise do a cheap “insert-if-missing”.
+  await query(
+    `
+    INSERT INTO mission_objective (mission_id, title, details, state, priority)
+    VALUES
       ($1, 'Objective A', 'demo', 'in_progress', 100),
       ($1, 'Objective B', 'demo', 'not_started', 80),
       ($1, 'Objective C', 'demo', 'blocked', 60)
-     RETURNING id`,
+    ON CONFLICT DO NOTHING
+    `,
     [missionId]
   );
-  objIds = objs.rows.map(r => r.id);
 
+  // Read back the three (either new or existing)
+  const objs = await query(
+    `SELECT id FROM mission_objective WHERE mission_id = $1 ORDER BY priority DESC, id ASC`,
+    [missionId]
+  );
+  objIds = objs.rows.map((r) => r.id);
+
+  // 3) Seed a 'created' event only if not already there (idempotent)
   await query(
-    `INSERT INTO mission_event (mission_id, kind, payload)
-     VALUES ($1, 'created', '{"seed":true}')`,
+    `
+    INSERT INTO mission_event (mission_id, kind, payload)
+    SELECT $1, 'created', '{"seed":true}'::jsonb
+    WHERE NOT EXISTS (
+      SELECT 1 FROM mission_event WHERE mission_id = $1 AND kind = 'created'
+    )
+    `,
     [missionId]
   );
 });
+
 
 test('GET /api/missions/current returns snapshot with objectives and progress', async () => {
   const res = await request(app).get('/api/missions/current');

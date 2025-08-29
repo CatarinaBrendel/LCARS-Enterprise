@@ -6,6 +6,7 @@ import crewRoutes from './routes/crewRoute.js';
 import telemetryIngest from './routes/internal/telemetry.js';
 import triageRouter from './routes/triageRoute.js';
 import missionRouters from './routes/missionRoute.js';
+import engineeringRoute from './routes/engineeringRoute.js';
 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:8080';
 
@@ -19,6 +20,7 @@ app.use('/api', crewRoutes);
 app.use('/api', telemetryIngest);
 app.use('/api/triage', triageRouter);
 app.use('/api/missions', missionRouters);
+app.use('/api/engineering', engineeringRoute);
 
 // Error handler (keep it last)
 app.use((err, _req, res, _next) => {
