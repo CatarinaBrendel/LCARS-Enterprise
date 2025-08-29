@@ -24,14 +24,13 @@ function wsToListStatus(s = "") {
   }
 }
 
-// add this helper near the top of the file
 function matchesFilters(m, { status, sector, search }) {
   const ui = toUiStatus(m.status);
   if (status?.length && !status.includes(ui)) return false;
   if (sector && m.sector !== sector) return false;
   if (search) {
     const s = search.toLowerCase();
-    const hay = [m.code, m.authority, m.sector].map(v => String(v ?? '').toLowerCase());
+    const hay = [m.code, m.authority, m.sector].map(v => String(v ?? "").toLowerCase());
     if (!hay.some(v => v.includes(s))) return false;
   }
   return true;
@@ -50,12 +49,13 @@ export default function MissionOverview() {
     status, setStatus,
     sector, setSector,
     loading, error,
-  } = useMissions({ page: 1, pageSize: 25, sortBy: "started_at", sortDir: "desc" });
+  } = useMissions({ page: 1, pageSize: 10, sortBy: "started_at", sortDir: "desc" });
 
   const [sectors, setSectors] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [pendingNav, setPendingNav] = useState(null);
   const inflightRef = useRef(new Set());
+  const searchTimerRef = useRef(null);
 
   // id -> { progress, status } to override rows without refetching
   const [overrides, setOverrides] = useState(() => new Map());
@@ -64,8 +64,7 @@ export default function MissionOverview() {
     const key = String(id);
     setOverrides(prev => {
       const next = new Map(prev);
-      const cur  = next.get(key) || {};
-      next.set(key, { ...cur, ...partial });
+      next.set(key, { ...(next.get(key) || {}), ...partial });
       return next;
     });
   };
@@ -73,46 +72,37 @@ export default function MissionOverview() {
   // ── LIVE BUFFER (prepend new missions on page 1) ────────────────────────────
   const [live, setLive] = useState([]);
 
-  // refs to keep latest filter/page values without re-subscribing
-  const stRef = React.useRef({ status, sector, search, page, pageSize });
+  // keep latest filters/page in a ref for WS handlers
+  const stRef = useRef({ status, sector, search, page, pageSize });
   useEffect(() => { stRef.current = { status, sector, search, page, pageSize }; },
-                [status, sector, search, page, pageSize]);
+    [status, sector, search, page, pageSize]);
 
-  // subscribe to "all" ONCE
+  // subscribe to "all" once
   useEffect(() => {
     subscribeMission({});
     return () => unsubscribeMission({});
   }, []);
 
-  // listen to mission:created ONCE; push into live if visible under current filters and on page 1
+  // created → push to live if visible & on page 1 (register once)
   useEffect(() => {
     const handler = (m) => {
       const { status, sector, search, page, pageSize } = stRef.current;
       if (page !== 1) return;
-
-      const ui = toUiStatus(m.status);
-      if (status?.length && !status.includes(ui)) return;
-      if (sector && m.sector !== sector) return;
-      if (search) {
-        const s = search.toLowerCase();
-        const hay = [m.code, m.authority, m.sector].map(v => String(v ?? '').toLowerCase());
-        if (!hay.some(v => v.includes(s))) return;
-      }
-
-      setLive(prev => (prev.some(x => x.id === m.id) ? prev : [m, ...prev]).slice(0, pageSize));
+      if (!matchesFilters(m, { status, sector, search })) return;
+      setLive(prev => (prev.some(x => String(x.id) === String(m.id)) ? prev : [m, ...prev]).slice(0, pageSize));
     };
-
     const off = onMissionCreated(handler);
-    return off; // removed only on unmount
+    return off;
   }, []);
 
-  // clear or trim live when paging/sorting/filtering away
+  // trim/clear live when paging/sorting/filtering away
   useEffect(() => {
     if (page !== 1) setLive([]);
     else setLive(prev => prev.slice(0, pageSize));
   }, [page, sortBy, sortDir, search, sector, status, pageSize]);
   // ── END LIVE BUFFER ────────────────────────────────────────────────────────
 
+  // sectors list
   useEffect(() => {
     let alive = true;
     const ctrl = new AbortController();
@@ -122,58 +112,48 @@ export default function MissionOverview() {
     return () => { alive = false; ctrl.abort(); };
   }, []);
 
-  // WS status/progress overrides (register ONCE)
+  // WS overrides (register once)
   useEffect(() => {
     const offProg = onMissionProgress(({ missionId, progress_pct }) => {
       patchRow(String(missionId), { progress: clampPct(progress_pct) });
     });
-    
-     const offStatus = onMissionStatus(async ({ missionId, status }) => {
-    const s = String(status);
-    const idStr = String(missionId);
 
-    // patch existing rows
-    const partial = { status: wsToListStatus(s) };
-    if (s === "planned" || s === "not_started" || s.toUpperCase() === "NOT STARTED") {
-      partial.progress = 0;
-    }
-    patchRow(idStr, partial);
+    const offStatus = onMissionStatus(async ({ missionId, status }) => {
+      const s = String(status);
+      const idStr = String(missionId);
 
-    // If mission is not on current page, fetch it
-    const { status: filtStatus, sector, search, page, pageSize } = stRef.current;
-    if (page !== 1) return;
-
-    const alreadyHere = [...live, ...missions].some(m => String(m?.id) === idStr);
-    if (alreadyHere) return;
-
-    if (inflightRef.current.has(idStr)) return;
-    inflightRef.current.add(idStr);
-
-    try {
-    const { data: m } = await fetchMissionById(idStr);
-    const next = { ...m, status: s };
-
-      if (matchesFilters(next, { status: filtStatus, sector, search })) {
-        setLive(prev =>
-          (prev.some(x => String(x.id) === idStr) ? prev : [next, ...prev]).slice(0, pageSize)
-        );
+      // patch if it's already shown
+      const partial = { status: wsToListStatus(s) };
+      if (s === "planned" || s === "not_started" || s.toUpperCase() === "NOT STARTED") {
+        partial.progress = 0;
       }
-    } catch (err) {
-      console.warn("fetchMissionById error", idStr, err);
-    } finally {
-      inflightRef.current.delete(idStr);
-    }
-  });
-    
-    const offCreated = onMissionCreated((m) => {
+      patchRow(idStr, partial);
+
+      // if not on current page 1, try to fetch & show in live (respect filters)
       const { status: filtStatus, sector, search, page, pageSize } = stRef.current;
       if (page !== 1) return;
-      if (matchesFilters(m, { status: filtStatus, sector, search })) {
-        setLive(prev => (prev.some(x => x.id === m.id) ? prev : [m, ...prev]).slice(0, pageSize));
+
+      const alreadyHere = [...live, ...missions].some(m => String(m?.id) === idStr);
+      if (alreadyHere) return;
+
+      if (inflightRef.current.has(idStr)) return;
+      inflightRef.current.add(idStr);
+      try {
+        const { data: m } = await fetchMissionById(idStr);
+        const next = { ...m, status: s };
+        if (matchesFilters(next, { status: filtStatus, sector, search })) {
+          setLive(prev =>
+            (prev.some(x => String(x.id) === idStr) ? prev : [next, ...prev]).slice(0, pageSize)
+          );
+        }
+      } catch (err) {
+        console.warn("fetchMissionById error", idStr, err);
+      } finally {
+        inflightRef.current.delete(idStr);
       }
     });
 
-    return () => { offProg(); offStatus(); offCreated(); };
+    return () => { offProg(); offStatus(); };
   }, [live, missions]);
 
   // Merge: live (new first) + server page, then apply overrides; dedupe by id
@@ -181,7 +161,7 @@ export default function MissionOverview() {
     const seen = new Set();
     const merged = [...live, ...missions].filter(x => {
       if (!x) return false;
-      const id = x.id ?? x.code; // safety
+      const id = String(x.id ?? x.code);
       if (seen.has(id)) return false;
       seen.add(id);
       return true;
@@ -194,7 +174,7 @@ export default function MissionOverview() {
     []
   );
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const totalPages = Math.max(1, Math.ceil((total || 0) / Math.max(1, pageSize || 0)));
   const idx = (displayMissions ?? []).findIndex(m => m.id === selectedId);
 
   function openPrev() {
@@ -214,16 +194,23 @@ export default function MissionOverview() {
     setPendingNav(null);
   }, [displayMissions, loading, pendingNav]);
 
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl mb-4">Missions</h1>
+  // keep details live while modal is open
+  useEffect(() => {
+    if (!selectedId) return;
+    subscribeMission({ missionId: selectedId });
+    return () => unsubscribeMission({ missionId: selectedId });
+  }, [selectedId]);
 
-      {/* Optional: show a small hint when live buffer has items */}
-      {page === 1 && live.length > 0 && (
-        <div className="mb-3 text-sm opacity-70">
-          Showing {live.length} new mission{live.length > 1 ? "s" : ""} live…
-        </div>
-      )}
+  return (
+    <div className="px-4 py-2">
+      <div className="mb-2 flex flex-wrap justify-center items-baseline gap-x-3 gap-y-2">
+        <h1 className="text-2xl" >Missions</h1>
+        {page === 1 && live.length > 0 && (
+          <div className="text-sm opacity-70" aria-live="polite">
+            Showing {live.length} new mission{live.length > 1 ? "s" : ""} live…
+          </div>
+        )}
+      </div>
 
       <MissionList
         missions={displayMissions}
@@ -242,17 +229,21 @@ export default function MissionOverview() {
         onSelect={(m) => setSelectedId(m?.id)}
         onPageChange={setPage}
         onSortChange={({ sortBy, sortDir }) => { setSortBy(sortBy); setSortDir(sortDir); }}
+
+        // debounce via ref + reset page to 1
         onSearchChange={(value) => {
-          clearTimeout(window.__missionSearchT);
-          window.__missionSearchT = setTimeout(() => setSearch(value), 250);
+          if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+          searchTimerRef.current = setTimeout(() => { setPage(1); setSearch(value); }, 250);
         }}
-        onStatusChange={setStatus}
-        onSectorChange={setSector}
-        onClearFilters={() => { setStatus([]); setSector(""); setSearch(""); }}
+
+        // reset page to 1 on filter changes
+        onStatusChange={(v) => { setPage(1); setStatus(v); }}
+        onSectorChange={(v) => { setPage(1); setSector(v); }}
+        onClearFilters={() => { setStatus([]); setSector(""); setSearch(""); setPage(1); }}
       />
 
       <Modal open={!!selectedId} onClose={() => setSelectedId(null)} ariaLabel="Mission Overview">
-        <div className="sticky top-0 z-10 flex items-center justify-between bg-[rgb(18,18,18)] p-3 border-b border-zinc-800">
+        <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-900/95 backdrop-blur p-3 border-b border-zinc-800">
           <div className="flex items-center gap-3">
             <button className="rounded-lcars bg-zinc-800 hover:bg-zinc-700 px-3 py-1 disabled:opacity-40"
                     onClick={openPrev}
@@ -266,6 +257,13 @@ export default function MissionOverview() {
             </button>
             <span className="text-sm opacity-70">Page {page} / {totalPages}</span>
           </div>
+          <button
+            className="rounded-lcars bg-zinc-800 hover:bg-zinc-700 px-3 py-1"
+            onClick={() => setSelectedId(null)}
+            aria-label="Close mission details"
+          >
+            Close ✕
+          </button>
         </div>
 
         <MissionDetails

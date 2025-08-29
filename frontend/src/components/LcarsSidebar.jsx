@@ -3,15 +3,15 @@ import LcarsPillButton from "./LcarsPillButton";
 
 export default function LcarsSidebar({ current = "dashboard", onSelect = () => {}, className = "" }) {
   return (
-    <aside
+    <footer
       role="navigation"
-      aria-label="LCARS Navigation"
-      className={`w-72 shrink-0 p-4 pt-6 flex flex-col gap-3 sticky top-0 h-screen ${className}`}
+      aria-label="LCARS Footer Navigation"
+      className={`w-full px-4 py-3 ${className}`}
     >
-      {/* TOP decorative empty block */}
-      <div className="h-20 rounded-lcars bg-lcars-gold" />
-      <div className="h-10 rounded-lcars bg-lcars-blue" />
-
+      {/* LCARS trim */}
+      <div className="h-2 rounded-lcars bg-lcars-gold mb-3" />
+      
+      <div className="grid grid-flow-col auto-cols-max gap-3 overflow-x-auto pb-2">
       {/* Nav */}
       <LcarsPillButton color="gold"   isActive={current==='dashboard'}            onClick={()=>onSelect('dashboard')}>Dashboard</LcarsPillButton>
       <LcarsPillButton color="gold"   isActive={current==='command_operations'}   onClick={()=>onSelect('command_operations')}>Command & Operations</LcarsPillButton>
@@ -21,13 +21,7 @@ export default function LcarsSidebar({ current = "dashboard", onSelect = () => {
       <LcarsPillButton color="amber"  isActive={current==='engineering_systems'}  onClick={()=>onSelect('engineering_systems')}>Engineering & Ship Systems</LcarsPillButton>
       <LcarsPillButton color="copper" isActive={current==='logs'}                 onClick={()=>onSelect('logs')}>Logs</LcarsPillButton>
       <LcarsPillButton color="slate"  isActive={current==='blueprint'}            onClick={()=>onSelect('blueprint')}>Ship Blueprint</LcarsPillButton>
-
-      {/* push bottom block to bottom */}
-      <div className="flex-1" />
-
-      {/* BOTTOM decorative empty block */}
-      <div className="h-10 rounded-lcars bg-lcars-red" />
-      <div className="h-20 rounded-lcars bg-lcars-purple" />
-    </aside>
+      </div>
+    </footer>
   );
 }

@@ -15,7 +15,7 @@ export default function LcarsPillButton({
       className={[
         "relative w-full h-10 px-2 rounded-lcars",
         "flex items-center justify-center text-center",
-        "uppercase tracking-[.18em] text-[.9rem] font-semibold leading-none",
+        "font-semibold leading-none",
         // ✨ transparent pill: no colored background
         "bg-transparent text-[rgb(var(--lcars-text))]",
         // gentle hover/focus
